@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Environment variables — NEVER commit credentials
+.env
+.env.*
+!.env.example
+
+# SQLite database file
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Prisma generated client
+**/generated/prisma/
+
+# Build outputs
+.next/
+dist/
+build/
+out/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/

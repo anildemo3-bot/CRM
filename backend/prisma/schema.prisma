@@ -1,0 +1,402 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// --- CORE & AUTH ---
+
+enum Role {
+  ADMIN
+  MANAGER
+  SALES
+  DEVELOPER
+  CLIENT
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  logo      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users     User[]
+  contacts  Contact[]
+  companies Company[]
+  projects  Project[]
+  pipelines Pipeline[]
+  deals     Deal[]
+  invoices  Invoice[]
+  campaigns Campaign[]
+  employees Employee[]
+  tickets   Ticket[]
+  settings  OrgSettings?
+}
+
+model OrgSettings {
+  id             String       @id @default(cuid())
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  currency     String  @default("USD")
+  timezone     String  @default("UTC")
+  billingEmail String?
+
+  openaiKey   String?
+  stripeKey   String?
+  sendgridKey String?
+  twilioSid   String?
+  twilioToken String?
+}
+
+model User {
+  id             String       @id @default(cuid())
+  email          String       @unique
+  password       String
+  name           String
+  avatar         String?
+  role           Role         @default(SALES)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tasks        Task[]      @relation("AssignedTasks")
+  createdTasks Task[]      @relation("CreatedTasks")
+  notes        Note[]
+  messages     Message[]
+  timeEntries  TimeEntry[]
+}
+
+// --- SALES CRM ---
+
+model Contact {
+  id             String       @id @default(cuid())
+  firstName      String
+  lastName       String
+  email          String?
+  phone          String?
+  position       String?
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  companyId      String?
+  company        Company?     @relation(fields: [companyId], references: [id])
+
+  deals     Deal[]
+  notes     Note[]
+  tags      Tag[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Company {
+  id             String       @id @default(cuid())
+  name           String
+  website        String?
+  industry       String?
+  size           Int?
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  contacts  Contact[]
+  deals     Deal[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Pipeline {
+  id             String       @id @default(cuid())
+  name           String
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  stages    Stage[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Stage {
+  id         String   @id @default(cuid())
+  name       String
+  order      Int
+  pipelineId String
+  pipeline   Pipeline @relation(fields: [pipelineId], references: [id])
+
+  deals Deal[]
+}
+
+model Deal {
+  id             String       @id @default(cuid())
+  title          String
+  value          Float?
+  status         DealStatus   @default(OPEN)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  stageId        String
+  stage          Stage        @relation(fields: [stageId], references: [id])
+  contactId      String?
+  contact        Contact?     @relation(fields: [contactId], references: [id])
+  companyId      String?
+  company        Company?     @relation(fields: [companyId], references: [id])
+
+  expectedClose DateTime?
+  forecast      Float?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+enum DealStatus {
+  OPEN
+  WON
+  LOST
+}
+
+// --- PROJECT MANAGEMENT ---
+
+model Project {
+  id             String        @id @default(cuid())
+  name           String
+  description    String?
+  status         ProjectStatus @default(PLANNING)
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+
+  tasks     Task[]
+  sprints   Sprint[]
+  boards    Board[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum ProjectStatus {
+  PLANNING
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+}
+
+model Task {
+  id          String     @id @default(cuid())
+  title       String
+  description String?
+  priority    Priority   @default(MEDIUM)
+  status      TaskStatus @default(TODO)
+  projectId   String
+  project     Project    @relation(fields: [projectId], references: [id])
+  assigneeId  String?
+  assignee    User?      @relation("AssignedTasks", fields: [assigneeId], references: [id])
+  creatorId   String
+  creator     User       @relation("CreatedTasks", fields: [creatorId], references: [id])
+
+  startDate   DateTime?
+  dueDate     DateTime?
+  tags        Tag[]
+  notes       Note[]
+  timeEntries TimeEntry[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  REVIEW
+  DONE
+}
+
+model Sprint {
+  id        String   @id @default(cuid())
+  name      String
+  startDate DateTime
+  endDate   DateTime
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id])
+}
+
+model Board {
+  id        String  @id @default(cuid())
+  name      String
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id])
+}
+
+// --- FINANCE ---
+
+model Invoice {
+  id             String        @id @default(cuid())
+  invoiceNumber  String
+  amount         Float
+  tax            Float         @default(0)
+  status         InvoiceStatus @default(DRAFT)
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+
+  clientId String? // Can be Contact ID
+  dueDate  DateTime
+  items    LineItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  VOID
+}
+
+model LineItem {
+  id          String  @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice @relation(fields: [invoiceId], references: [id])
+  description String
+  quantity    Float
+  unitPrice   Float
+}
+
+model TimeEntry {
+  id       String   @id @default(cuid())
+  userId   String
+  user     User     @relation(fields: [userId], references: [id])
+  taskId   String?
+  task     Task?    @relation(fields: [taskId], references: [id])
+  duration Int // in minutes
+  date     DateTime @default(now())
+  note     String?
+}
+
+// --- HR / OPERATIONS ---
+
+model Employee {
+  id             String       @id @default(cuid())
+  name           String
+  email          String       @unique
+  role           String
+  salary         Float?
+  joiningDate    DateTime
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  attendance Attendance[]
+  reviews    PerformanceReview[]
+}
+
+model Attendance {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id])
+  date       DateTime @default(now())
+  status     String   @default("PRESENT") // PRESENT, ABSENT, LEAVE
+}
+
+model PerformanceReview {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id])
+  reviewer   String
+  rating     Int
+  comments   String?
+  date       DateTime @default(now())
+}
+
+// --- MARKETING ---
+
+model Campaign {
+  id             String       @id @default(cuid())
+  name           String
+  type           CampaignType
+  status         String       @default("ACTIVE")
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  leads     Lead[]
+  createdAt DateTime @default(now())
+}
+
+enum CampaignType {
+  EMAIL
+  SMS
+  SOCIAL
+}
+
+model Lead {
+  id         String    @id @default(cuid())
+  email      String
+  phone      String?
+  score      Int       @default(0)
+  campaignId String?
+  campaign   Campaign? @relation(fields: [campaignId], references: [id])
+}
+
+// --- SUPPORT / TICKETING ---
+
+model Ticket {
+  id             String       @id @default(cuid())
+  subject        String
+  description    String
+  status         TicketStatus @default(OPEN)
+  priority       Priority     @default(MEDIUM)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+// --- UTILITIES ---
+
+model Note {
+  id      String @id @default(cuid())
+  content String
+  userId  String
+  user    User   @relation(fields: [userId], references: [id])
+
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id])
+  taskId    String?
+  task      Task?    @relation(fields: [taskId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model Tag {
+  id    String  @id @default(cuid())
+  name  String
+  color String?
+
+  contacts Contact[]
+  tasks    Task[]
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  content   String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  channelId String
+  createdAt DateTime @default(now())
+}
