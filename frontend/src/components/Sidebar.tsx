@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Users, FolderKanban, CreditCard,
   Settings, LogOut, BarChart3, CheckSquare, Sparkles,
   Briefcase, Phone, Megaphone, Brain, BookOpen,
-  Handshake, Cpu, TrendingUp, ChevronDown, Rocket, Zap
+  Handshake, Cpu, TrendingUp, ChevronDown, Rocket, Zap, PhoneCall
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -34,6 +34,7 @@ const navGroups = [
     dot: "bg-emerald-400",
     items: [
       { name: "Sales CRM", icon: Users, href: "/dashboard/crm" },
+      { name: "Cold Outreach", icon: PhoneCall, href: "/dashboard/outreach" },
       { name: "Marketing", icon: Megaphone, href: "/dashboard/marketing" },
       { name: "Finance", icon: CreditCard, href: "/dashboard/finance" },
     ],

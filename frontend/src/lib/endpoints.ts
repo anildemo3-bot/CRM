@@ -98,6 +98,26 @@ export const knowledgeApi = {
   deleteTemplate: (id: string) => api.delete(`/knowledge/templates/${id}`),
 };
 
+// --- OUTREACH ---
+export const outreachApi = {
+  prospects: () => api.get("/outreach/prospects"),
+  createProspect: (data: any) => api.post("/outreach/prospects", data),
+  updateProspect: (id: string, data: any) => api.patch(`/outreach/prospects/${id}`, data),
+  deleteProspect: (id: string) => api.delete(`/outreach/prospects/${id}`),
+  importProspects: (rows: any[]) => api.post("/outreach/prospects/import", { rows }),
+  calls: () => api.get("/outreach/calls"),
+  createCall: (data: any) => api.post("/outreach/calls", data),
+  deleteCall: (id: string) => api.delete(`/outreach/calls/${id}`),
+  sequences: () => api.get("/outreach/sequences"),
+  createSequence: (data: any) => api.post("/outreach/sequences", data),
+  deleteSequence: (id: string) => api.delete(`/outreach/sequences/${id}`),
+  templates: () => api.get("/outreach/templates"),
+  createTemplate: (data: any) => api.post("/outreach/templates", data),
+  updateTemplate: (id: string, data: any) => api.patch(`/outreach/templates/${id}`, data),
+  deleteTemplate: (id: string) => api.delete(`/outreach/templates/${id}`),
+  analytics: () => api.get("/outreach/analytics"),
+};
+
 // --- PARTNERS ---
 export const partnersApi = {
   list: () => api.get("/partners"),
