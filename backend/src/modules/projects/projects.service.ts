@@ -226,7 +226,7 @@ export class ProjectsService {
         name: true,
         email: true,
         role: true,
-        assignedTasks: {
+        tasks: {
           where: { status: { not: 'DONE' } },
           select: {
             id: true,
@@ -247,7 +247,7 @@ export class ProjectsService {
     });
 
     return users.map((u) => {
-      const activeTasks = u.assignedTasks;
+      const activeTasks = u.tasks;
       const hoursThisWeek = u.timeEntries.reduce((sum, e) => sum + e.duration, 0) / 60;
       const overdueTasks = activeTasks.filter(
         (t) => t.dueDate && new Date(t.dueDate) < new Date(),
@@ -354,7 +354,7 @@ export class ProjectsService {
       select: {
         id: true,
         name: true,
-        assignedTasks: {
+        tasks: {
           where: { status: { not: 'DONE' } },
           select: { id: true },
         },
@@ -368,7 +368,7 @@ export class ProjectsService {
     for (const task of overdueTasks) {
       // Pick member with fewest active tasks (round-robin with load balancing)
       const sorted = [...members].sort(
-        (a, b) => a.assignedTasks.length - b.assignedTasks.length,
+        (a, b) => a.tasks.length - b.tasks.length,
       );
       const target = sorted[0];
 
@@ -394,7 +394,7 @@ export class ProjectsService {
       // Update the in-memory count so the next iteration is balanced
       const memberIdx = members.findIndex(m => m.id === target.id);
       if (memberIdx !== -1) {
-        members[memberIdx].assignedTasks.push({ id: task.id });
+        members[memberIdx].tasks.push({ id: task.id });
       }
 
       reassigned.push({
