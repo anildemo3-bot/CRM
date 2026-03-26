@@ -150,6 +150,9 @@ export const outreachApi = {
   sdrStats: () => api.get("/outreach/sdr-stats"),
   // Analytics
   analytics: () => api.get("/outreach/analytics"),
+  // Daily distribution
+  distributeLeads: (leadsPerSdr?: number) => api.post("/outreach/distribute", { leadsPerSdr }),
+  myLeadsToday: () => api.get("/outreach/my-leads-today"),
   // AI
   generateMessage: (data: any) => api.post("/outreach/ai/generate-message", data),
   getFollowUps: (prospectId: string) => api.get(`/outreach/ai/follow-ups/${prospectId}`),

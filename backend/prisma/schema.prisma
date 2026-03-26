@@ -400,3 +400,90 @@ model Message {
   channelId String
   createdAt DateTime @default(now())
 }
+
+// --- OUTREACH ENGINE ---
+
+model Prospect {
+  id              String    @id @default(cuid())
+  organizationId  String
+  assignedTo      String?
+  firstName       String
+  lastName        String
+  email           String?
+  phone           String?
+  company         String?
+  title           String?
+  channel         String    @default("EMAIL")
+  status          String    @default("NEW")
+  distributedDate DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  callLogs    OutreachCall[]
+  activities  OutreachActivity[]
+  messages    OutreachMessage[]
+}
+
+model OutreachCall {
+  id         String   @id @default(cuid())
+  orgId      String
+  userId     String
+  prospectId String
+  prospect   Prospect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+  outcome    String   @default("NO_ANSWER")
+  duration   Int      @default(0)
+  notes      String?
+  callDate   DateTime @default(now())
+  createdAt  DateTime @default(now())
+}
+
+model OutreachActivity {
+  id          String   @id @default(cuid())
+  orgId       String
+  userId      String
+  prospectId  String
+  prospect    Prospect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+  type        String
+  description String
+  createdAt   DateTime @default(now())
+}
+
+model OutreachMessage {
+  id         String   @id @default(cuid())
+  orgId      String
+  userId     String
+  prospectId String
+  prospect   Prospect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+  channel    String   @default("EMAIL")
+  direction  String   @default("OUTBOUND")
+  subject    String?
+  body       String
+  assignedTo String?
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+}
+
+model OutreachSequence {
+  id            String   @id @default(cuid())
+  orgId         String
+  createdBy     String
+  name          String
+  description   String?
+  steps         Json     @default("[]")
+  isActive      Boolean  @default(true)
+  enrolledCount Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model OutreachTemplate {
+  id        String   @id @default(cuid())
+  orgId     String
+  createdBy String
+  name      String
+  subject   String?
+  body      String
+  channel   String   @default("EMAIL")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

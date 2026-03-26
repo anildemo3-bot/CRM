@@ -42,6 +42,18 @@ export class OutreachController {
     return this.outreachService.deleteProspect(id);
   }
 
+  // ─── DAILY DISTRIBUTION ──────────────────────────────────────
+
+  @Post('distribute')
+  distribute(@Request() req: any, @Body() body: any) {
+    return this.outreachService.distributeLeads(req.user.orgId, body.leadsPerSdr || 55);
+  }
+
+  @Get('my-leads-today')
+  myLeadsToday(@Request() req: any) {
+    return this.outreachService.getMyLeadsToday(req.user.orgId, req.user.userId);
+  }
+
   // ─── CALL LOGS ───────────────────────────────────────────────
 
   @Get('calls')
@@ -98,7 +110,7 @@ export class OutreachController {
     @Query('prospectId') prospectId?: string,
     @Query('sequenceId') sequenceId?: string,
   ) {
-    return this.outreachService.getEnrollments(req.user.orgId, prospectId, sequenceId);
+    return this.outreachService.getEnrollments(req.user.orgId);
   }
 
   // ─── EMAIL TEMPLATES ─────────────────────────────────────────

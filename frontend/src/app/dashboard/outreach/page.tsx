@@ -8,7 +8,7 @@ import {
   Clock, Voicemail, Users, BarChart3, MessageSquare,
   Linkedin, Globe, Send, Eye, Reply, ChevronDown,
   Activity, Zap, Inbox, TrendingUp, GripVertical,
-  Bot, Sparkles, ArrowRight, Target, List,
+  Bot, Sparkles, ArrowRight, Target, List, Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { outreachApi } from "@/lib/endpoints";
@@ -17,7 +17,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 
 // ─── CONSTANTS ────────────────────────────────────────────────
 
-const MAIN_TABS = ["Leads", "Sequences", "Inbox", "Activity", "SDR Dashboard", "Analytics"] as const;
+const MAIN_TABS = ["My Today", "Leads", "Sequences", "Inbox", "Activity", "SDR Dashboard", "Analytics"] as const;
 type MainTab = typeof MAIN_TABS[number];
 
 const CALL_STATUSES = ["NEW", "ATTEMPTED", "CONTACTED", "QUALIFIED", "CALLBACK", "DEAD"];
@@ -72,7 +72,7 @@ const CHANNEL_COLORS: Record<string, string> = {
 
 export default function OutreachPage() {
   const { toast } = useToast();
-  const [mainTab, setMainTab] = useState<MainTab>("Leads");
+  const [mainTab, setMainTab] = useState<MainTab>("My Today");
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Data state
@@ -84,6 +84,8 @@ export default function OutreachPage() {
   const [inbox, setInbox] = useState<any[]>([]);
   const [activities, setActivities] = useState<any[]>([]);
   const [sdrStats, setSdrStats] = useState<any[]>([]);
+  const [todayData, setTodayData] = useState<{ leads: any[]; stats: any } | null>(null);
+  const [distributing, setDistributing] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Filters
@@ -133,7 +135,8 @@ export default function OutreachPage() {
       outreachApi.inbox?.().catch(() => ({ data: [] })) || Promise.resolve({ data: [] }),
       outreachApi.activities?.().catch(() => ({ data: [] })) || Promise.resolve({ data: [] }),
       outreachApi.sdrStats?.().catch(() => ({ data: [] })) || Promise.resolve({ data: [] }),
-    ]).then(([p, c, s, t, a, i, act, sdr]) => {
+      outreachApi.myLeadsToday?.().catch(() => ({ data: null })) || Promise.resolve({ data: null }),
+    ]).then(([p, c, s, t, a, i, act, sdr, today]) => {
       setProspects(p.data || []);
       setCalls(c.data || []);
       setSequences(s.data || []);
@@ -142,6 +145,7 @@ export default function OutreachPage() {
       setInbox(i.data || []);
       setActivities(act.data || []);
       setSdrStats(sdr.data || []);
+      setTodayData(today.data || null);
     }).finally(() => setLoading(false));
   }, []);
 
@@ -345,6 +349,173 @@ export default function OutreachPage() {
 
       {/* Content */}
       <div className="flex-1 overflow-auto">
+        {/* ── MY TODAY TAB ──────────────────────────────── */}
+        {mainTab === "My Today" && (
+          <div className="p-6">
+            {/* Header + Distribute button */}
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="font-semibold text-zinc-200 text-lg">My Leads Today</h2>
+                <p className="text-sm text-zinc-500 mt-0.5">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+              </div>
+              <button
+                onClick={async () => {
+                  setDistributing(true);
+                  try {
+                    const res = await outreachApi.distributeLeads?.(55);
+                    toast(`Distributed ${res.data.distributed} leads to ${res.data.sdrs} SDRs`, "success");
+                    const r = await outreachApi.myLeadsToday?.();
+                    setTodayData(r.data);
+                  } catch { toast("Distribution failed", "error"); }
+                  finally { setDistributing(false); }
+                }}
+                disabled={distributing}
+                className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors"
+              >
+                {distributing ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
+                Distribute Leads
+              </button>
+            </div>
+
+            {/* Stats bar */}
+            {todayData && (
+              <>
+                <div className="grid grid-cols-5 gap-3 mb-5">
+                  {[
+                    { label: "Total", val: todayData.stats.total, color: "text-zinc-300" },
+                    { label: "Pending", val: todayData.stats.pending, color: "text-amber-400" },
+                    { label: "Called", val: todayData.stats.called, color: "text-blue-400" },
+                    { label: "Booked", val: todayData.stats.booked, color: "text-emerald-400" },
+                    { label: "Not Interested", val: todayData.stats.notInterested, color: "text-rose-400" },
+                  ].map(s => (
+                    <div key={s.label} className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-3 text-center">
+                      <div className={cn("text-2xl font-bold", s.color)}>{s.val}</div>
+                      <div className="text-xs text-zinc-500 mt-0.5">{s.label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Progress bar */}
+                <div className="mb-5">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs text-zinc-500">Daily progress</span>
+                    <span className="text-xs text-zinc-400">{todayData.stats.called} / {todayData.stats.total} leads handled</span>
+                  </div>
+                  <div className="w-full bg-zinc-800 rounded-full h-2">
+                    <div
+                      className="h-2 rounded-full bg-violet-500 transition-all"
+                      style={{ width: `${todayData.stats.total > 0 ? Math.round((todayData.stats.called / todayData.stats.total) * 100) : 0}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Lead cards */}
+                {todayData.leads.length === 0 ? (
+                  <div className="text-center py-20 text-zinc-600">
+                    <Target size={40} className="mx-auto mb-3 opacity-30" />
+                    <p className="text-sm">No leads assigned yet. Click &quot;Distribute Leads&quot; to get started.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {todayData.leads.map((lead: any) => {
+                      const lastCall = lead.callLogs?.[0];
+                      const isCalled = (lead._count?.callLogs || 0) > 0;
+                      const statusColor: Record<string, string> = {
+                        NEW: "bg-zinc-500/20 text-zinc-400 border-zinc-500/30",
+                        ATTEMPTED: "bg-amber-500/20 text-amber-400 border-amber-500/30",
+                        CONTACTED: "bg-blue-500/20 text-blue-400 border-blue-500/30",
+                        QUALIFIED: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+                        CALLBACK: "bg-violet-500/20 text-violet-400 border-violet-500/30",
+                        DEAD: "bg-rose-500/20 text-rose-400 border-rose-500/30",
+                      };
+                      return (
+                        <div
+                          key={lead.id}
+                          className={cn(
+                            "flex items-center gap-4 p-4 rounded-xl border transition-colors",
+                            isCalled ? "bg-zinc-900/30 border-zinc-800/50 opacity-70" : "bg-zinc-900/60 border-zinc-700 hover:border-zinc-600"
+                          )}
+                        >
+                          {/* Avatar */}
+                          <div className="w-10 h-10 rounded-full bg-violet-600/30 flex items-center justify-center text-sm font-bold text-violet-300 flex-shrink-0">
+                            {lead.firstName?.[0]}{lead.lastName?.[0]}
+                          </div>
+
+                          {/* Info */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-sm text-zinc-200">{lead.firstName} {lead.lastName}</span>
+                              <span className={cn("text-xs px-1.5 py-0.5 rounded border", statusColor[lead.status] || statusColor.NEW)}>
+                                {lead.status}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3 mt-0.5">
+                              {lead.company && <span className="text-xs text-zinc-500">{lead.company}</span>}
+                              {lead.phone && <span className="text-xs text-zinc-400 flex items-center gap-1"><Phone size={10} />{lead.phone}</span>}
+                              {lead.email && <span className="text-xs text-zinc-500">{lead.email}</span>}
+                            </div>
+                            {lastCall && (
+                              <p className="text-xs text-zinc-600 mt-0.5">Last: {lastCall.outcome} · {new Date(lastCall.callDate).toLocaleTimeString()}</p>
+                            )}
+                          </div>
+
+                          {/* Quick Actions */}
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <button
+                              onClick={() => { setCallProspect(lead); setShowCallModal(true); }}
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 hover:bg-violet-500 rounded-lg text-xs font-medium transition-colors"
+                            >
+                              <Phone size={12} /> Call
+                            </button>
+                            <button
+                              onClick={async () => {
+                                await outreachApi.updateProspect?.(lead.id, { status: 'QUALIFIED' });
+                                const r = await outreachApi.myLeadsToday?.();
+                                setTodayData(r.data);
+                                toast("Marked as Booked!", "success");
+                              }}
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/30 rounded-lg text-xs text-emerald-400 transition-colors"
+                            >
+                              <CheckCircle2 size={12} /> Booked
+                            </button>
+                            <button
+                              onClick={async () => {
+                                await outreachApi.updateProspect?.(lead.id, { status: 'DEAD' });
+                                const r = await outreachApi.myLeadsToday?.();
+                                setTodayData(r.data);
+                              }}
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600/20 hover:bg-rose-600/40 border border-rose-500/30 rounded-lg text-xs text-rose-400 transition-colors"
+                            >
+                              <XCircle size={12} /> Not Interested
+                            </button>
+                            <button
+                              onClick={async () => {
+                                await outreachApi.updateProspect?.(lead.id, { status: 'CALLBACK' });
+                                const r = await outreachApi.myLeadsToday?.();
+                                setTodayData(r.data);
+                              }}
+                              className="flex items-center gap-1.5 px-2 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 rounded-lg text-xs text-zinc-400 transition-colors"
+                            >
+                              <Clock size={12} /> Callback
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            )}
+
+            {!todayData && (
+              <div className="text-center py-20 text-zinc-600">
+                <Target size={40} className="mx-auto mb-3 opacity-30" />
+                <p className="text-sm">Click &quot;Distribute Leads&quot; to assign today&apos;s leads to all SDRs.</p>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ── LEADS TAB ─────────────────────────────────── */}
         {mainTab === "Leads" && (
           <div className="p-6">
