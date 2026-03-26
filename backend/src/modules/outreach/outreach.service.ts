@@ -102,6 +102,9 @@ export class OutreachService {
     }
     this._logActivity(orgId, userId, 'CALL_MADE', data.prospectId,
       `Call outcome: ${data.outcome}${data.duration ? ` (${data.duration}s)` : ''}`);
+    if (data.outcome === 'INTERESTED') {
+      this._logActivity(orgId, userId, 'MEETING_BOOKED', data.prospectId, 'Meeting / demo booked');
+    }
     return log;
   }
 
@@ -313,9 +316,13 @@ export class OutreachService {
         };
       });
 
+      const meetingsBooked = activities.filter(
+        a => a.orgId === orgId && a.userId === userId && a.type === 'MEETING_BOOKED'
+      ).length;
+
       return {
         userId, callsToday, callsThisWeek, emailsSent,
-        replyRate, qualified, connectionRate, callsByDay,
+        replyRate, qualified, meetingsBooked, connectionRate, callsByDay,
         totalProspects: myProspects.length,
       };
     });

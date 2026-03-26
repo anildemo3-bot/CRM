@@ -705,9 +705,38 @@ export default function OutreachPage() {
                           <span className="text-xs text-zinc-500 bg-zinc-800 px-1.5 py-0.5 rounded">{act.type}</span>
                         </div>
                         <p className="text-sm text-zinc-400 mt-0.5">{act.description}</p>
-                        <p className="text-xs text-zinc-600 mt-0.5">
-                          {new Date(act.createdAt).toLocaleString()}
-                        </p>
+                        <div className="flex items-center gap-3 mt-1.5">
+                          <p className="text-xs text-zinc-600">{new Date(act.createdAt).toLocaleString()}</p>
+                          {actProspect && (
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => {
+                                  setComposeForm({ prospectId: act.prospectId, channel: "EMAIL", subject: "", body: "", direction: "OUTBOUND" });
+                                  setShowCompose(true);
+                                  setMainTab("Inbox");
+                                }}
+                                className="text-xs text-zinc-500 hover:text-blue-400 flex items-center gap-1 transition-colors"
+                              >
+                                <Reply size={10} /> Reply
+                              </button>
+                              <button
+                                onClick={() => { setCallProspect(actProspect); setShowCallModal(true); }}
+                                className="text-xs text-zinc-500 hover:text-violet-400 flex items-center gap-1 transition-colors"
+                              >
+                                <Phone size={10} /> Call
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setAiForm({ prospectName: `${actProspect.firstName} ${actProspect.lastName}`, company: actProspect.company || "", channel: actProspect.channel || "EMAIL", tone: "PROFESSIONAL", context: "" });
+                                  setShowAI(true);
+                                }}
+                                className="text-xs text-zinc-500 hover:text-emerald-400 flex items-center gap-1 transition-colors"
+                              >
+                                <ArrowRight size={10} /> Next Step
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
@@ -737,7 +766,7 @@ export default function OutreachPage() {
                         { label: "Calls This Week", val: sdr.callsThisWeek, color: "text-violet-400" },
                         { label: "Emails Sent", val: sdr.emailsSent, color: "text-cyan-400" },
                         { label: "Reply Rate", val: `${sdr.replyRate}%`, color: "text-emerald-400" },
-                        { label: "Qualified", val: sdr.qualified, color: "text-amber-400" },
+                        { label: "Meetings Booked", val: sdr.meetingsBooked ?? sdr.qualified, color: "text-amber-400" },
                       ].map(s => (
                         <div key={s.label} className="bg-zinc-800/60 rounded-lg p-3 text-center">
                           <div className={cn("text-2xl font-bold", s.color)}>{s.val}</div>

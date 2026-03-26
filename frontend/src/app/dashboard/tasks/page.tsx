@@ -79,6 +79,12 @@ export default function TasksPage() {
   const [timeNote, setTimeNote] = useState("");
   const [timeDuration, setTimeDuration] = useState(30);
 
+  // Checklist checked state (local, per note id)
+  const [checkedNotes, setCheckedNotes] = useState<Set<string>>(new Set());
+  // Approval modal before marking DONE
+  const [approvalTask, setApprovalTask] = useState<Task | null>(null);
+  const [approvalChecked, setApprovalChecked] = useState<Set<string>>(new Set());
+
   // Checklist note input per task
   const [noteInput, setNoteInput] = useState<Record<string, string>>({});
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
@@ -157,12 +163,32 @@ export default function TasksPage() {
   };
 
   const moveTask = async (taskId: string, status: TaskStatus) => {
+    if (status === "DONE") {
+      const task = tasks.find(t => t.id === taskId);
+      if (task?.notes && task.notes.length > 0) {
+        setApprovalTask(task);
+        setApprovalChecked(new Set());
+        return;
+      }
+    }
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status } : t));
     try {
       await tasksApi.updateStatus(taskId, { status });
     } catch {
       toast("Failed to move task", "error");
     }
+  };
+
+  const confirmDone = async () => {
+    if (!approvalTask) return;
+    setTasks(prev => prev.map(t => t.id === approvalTask.id ? { ...t, status: "DONE" } : t));
+    try {
+      await tasksApi.updateStatus(approvalTask.id, { status: "DONE" });
+      toast("Task marked as Done", "success");
+    } catch {
+      toast("Failed to update task", "error");
+    }
+    setApprovalTask(null);
   };
 
   // ─── TIME TRACKING ────────────────────────────────────────────
@@ -358,18 +384,32 @@ export default function TasksPage() {
               {/* Checklist */}
               <p className="text-xs text-zinc-500 mb-1.5 font-medium">Checklist</p>
               <div className="space-y-1 mb-2">
-                {(task.notes || []).map(note => (
-                  <div key={note.id} className="flex items-center gap-2 group/note">
-                    <CheckCircle2 size={12} className="text-zinc-500 flex-shrink-0" />
-                    <span className="text-xs text-zinc-400 flex-1">{note.content}</span>
-                    <button
-                      onClick={() => deleteNote(task.id, note.id)}
-                      className="opacity-0 group-hover/note:opacity-100 text-zinc-600 hover:text-rose-400"
-                    >
-                      <X size={10} />
-                    </button>
-                  </div>
-                ))}
+                {(task.notes || []).map(note => {
+                  const isChecked = checkedNotes.has(note.id);
+                  return (
+                    <div key={note.id} className="flex items-center gap-2 group/note">
+                      <button
+                        onClick={() => setCheckedNotes(prev => {
+                          const next = new Set(prev);
+                          if (next.has(note.id)) next.delete(note.id); else next.add(note.id);
+                          return next;
+                        })}
+                        className="flex-shrink-0"
+                      >
+                        <CheckCircle2 size={12} className={isChecked ? "text-emerald-500" : "text-zinc-600"} />
+                      </button>
+                      <span className={cn("text-xs flex-1", isChecked ? "line-through text-zinc-600" : "text-zinc-400")}>
+                        {note.content}
+                      </span>
+                      <button
+                        onClick={() => deleteNote(task.id, note.id)}
+                        className="opacity-0 group-hover/note:opacity-100 text-zinc-600 hover:text-rose-400"
+                      >
+                        <X size={10} />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
               <div className="flex gap-1">
                 <input
@@ -729,6 +769,65 @@ export default function TasksPage() {
                 <button
                   onClick={() => setShowTimeLog(null)}
                   className="flex-1 bg-zinc-800 hover:bg-zinc-700 rounded-lg py-2 text-sm text-zinc-300 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Approval Checklist Modal */}
+      <AnimatePresence>
+        {approvalTask && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-zinc-900 border border-zinc-700 rounded-xl p-5 w-full max-w-sm"
+            >
+              <h3 className="font-semibold mb-1 flex items-center gap-2">
+                <CheckSquare size={18} className="text-emerald-400" /> Approval Checklist
+              </h3>
+              <p className="text-xs text-zinc-500 mb-4">Check all items before marking this task as Done.</p>
+              <div className="space-y-2 mb-4">
+                {(approvalTask.notes || []).map(note => {
+                  const checked = approvalChecked.has(note.id);
+                  return (
+                    <label key={note.id} className="flex items-center gap-3 cursor-pointer group">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => setApprovalChecked(prev => {
+                          const next = new Set(prev);
+                          if (next.has(note.id)) next.delete(note.id); else next.add(note.id);
+                          return next;
+                        })}
+                        className="accent-emerald-500 w-4 h-4"
+                      />
+                      <span className={cn("text-sm", checked ? "line-through text-zinc-500" : "text-zinc-300")}>
+                        {note.content}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-zinc-500 mb-3">
+                {approvalChecked.size} / {approvalTask.notes?.length || 0} items checked
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={confirmDone}
+                  disabled={approvalChecked.size < (approvalTask.notes?.length || 0)}
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg py-2 text-sm font-medium transition-colors"
+                >
+                  Mark as Done
+                </button>
+                <button
+                  onClick={() => setApprovalTask(null)}
+                  className="flex-1 bg-zinc-800 hover:bg-zinc-700 rounded-lg py-2 text-sm text-zinc-300"
                 >
                   Cancel
                 </button>
