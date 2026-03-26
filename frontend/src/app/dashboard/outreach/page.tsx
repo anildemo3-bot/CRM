@@ -973,7 +973,7 @@ export default function OutreachPage() {
                 </div>
                 {seqForm.steps.length === 0 && (
                   <div className="text-center py-8 border border-dashed border-zinc-700 rounded-xl text-zinc-600 text-sm">
-                    Click "Add Step" to build your sequence
+                    Click &quot;Add Step&quot; to build your sequence
                   </div>
                 )}
                 {seqForm.steps.map((step, i) => {

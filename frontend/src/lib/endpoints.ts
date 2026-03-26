@@ -155,6 +155,14 @@ export const outreachApi = {
   getFollowUps: (prospectId: string) => api.get(`/outreach/ai/follow-ups/${prospectId}`),
 };
 
+// --- NOTIFICATIONS ---
+export const notificationsApi = {
+  list: () => api.get("/notifications"),
+  unreadCount: () => api.get("/notifications/unread-count"),
+  markRead: (id: string) => api.patch(`/notifications/${id}/read`, {}),
+  markAllRead: () => api.patch("/notifications/read-all", {}),
+};
+
 // --- PARTNERS ---
 export const partnersApi = {
   list: () => api.get("/partners"),
