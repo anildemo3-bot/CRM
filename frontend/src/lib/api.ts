@@ -1,9 +1,10 @@
 import axios from 'axios';
 
-const PROD_URL = 'https://crm-backends.onrender.com';
-const envUrl = process.env.NEXT_PUBLIC_API_URL ?? '';
-// Strip any whitespace/encoded chars that might come from misconfigured env vars
-const rawUrl = envUrl.replace(/\s+/g, '').length > 0 ? envUrl.replace(/\s+/g, '') : PROD_URL;
+// Detect environment by hostname — avoids relying on env vars that can be misconfigured
+const isLocalhost =
+  typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+const rawUrl = isLocalhost ? 'http://localhost:3010' : 'https://crm-backends.onrender.com';
 const api = axios.create({
   baseURL: rawUrl,
   headers: { 'Content-Type': 'application/json' },
