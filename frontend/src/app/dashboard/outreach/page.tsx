@@ -572,7 +572,7 @@ export default function OutreachPage() {
                       <div className="text-xs text-zinc-600 truncate mt-1">{thread.messages[0].body}</div>
                     )}
                     <div className="flex gap-1 mt-1">
-                      {[...new Set(thread.messages.map((m: any) => m.channel))].map((ch: any) => {
+                      {Array.from(new Set(thread.messages.map((m: any) => m.channel))).map((ch: any) => {
                         const CIcon = CHANNEL_ICONS[ch] || Mail;
                         return <CIcon key={ch} size={10} className="text-zinc-600" />;
                       })}
