@@ -41,7 +41,7 @@ export class ProjectsController {
 
   @Post('tasks')
   createTask(@Request() req: any, @Body() data: any) {
-    return this.projectsService.createTask(req.user.orgId, req.user.sub, data);
+    return this.projectsService.createTask(req.user.orgId, req.user.userId, data);
   }
 
   @Patch('tasks/:id')
@@ -63,7 +63,7 @@ export class ProjectsController {
 
   @Post('tasks/:id/notes')
   addTaskNote(@Param('id') id: string, @Request() req: any, @Body('content') content: string) {
-    return this.projectsService.addTaskNote(id, req.user.sub, content);
+    return this.projectsService.addTaskNote(id, req.user.userId, content);
   }
 
   @Delete('tasks/notes/:noteId')
@@ -80,7 +80,7 @@ export class ProjectsController {
 
   @Post('time')
   logTime(@Request() req: any, @Body() data: any) {
-    return this.projectsService.logTime(req.user.sub, data);
+    return this.projectsService.logTime(req.user.userId, data);
   }
 
   @Delete('time/:id')

@@ -14,27 +14,27 @@ export class OutreachController {
 
   @Get('prospects')
   getProspects(@Request() req: any) {
-    return this.outreachService.getProspects(req.user.orgId, req.user.sub, req.user.role);
+    return this.outreachService.getProspects(req.user.orgId, req.user.userId, req.user.role);
   }
 
   @Post('prospects')
   createProspect(@Request() req: any, @Body() body: any) {
-    return this.outreachService.createProspect(req.user.orgId, req.user.sub, body);
+    return this.outreachService.createProspect(req.user.orgId, req.user.userId, body);
   }
 
   @Post('prospects/import')
   importProspects(@Request() req: any, @Body() body: { rows: any[] }) {
-    return this.outreachService.importProspects(req.user.orgId, req.user.sub, body.rows);
+    return this.outreachService.importProspects(req.user.orgId, req.user.userId, body.rows);
   }
 
   @Patch('prospects/:id/assign')
   assignProspect(@Param('id') id: string, @Request() req: any, @Body('assigneeId') assigneeId: string) {
-    return this.outreachService.assignProspect(id, assigneeId, req.user.orgId, req.user.sub);
+    return this.outreachService.assignProspect(id, assigneeId, req.user.orgId, req.user.userId);
   }
 
   @Patch('prospects/:id')
   updateProspect(@Param('id') id: string, @Request() req: any, @Body() body: any) {
-    return this.outreachService.updateProspect(id, req.user.sub, req.user.orgId, body);
+    return this.outreachService.updateProspect(id, req.user.userId, req.user.orgId, body);
   }
 
   @Delete('prospects/:id')
@@ -46,12 +46,12 @@ export class OutreachController {
 
   @Get('calls')
   getCallLogs(@Request() req: any) {
-    return this.outreachService.getCallLogs(req.user.orgId, req.user.sub, req.user.role);
+    return this.outreachService.getCallLogs(req.user.orgId, req.user.userId, req.user.role);
   }
 
   @Post('calls')
   createCallLog(@Request() req: any, @Body() body: any) {
-    return this.outreachService.createCallLog(req.user.orgId, req.user.sub, body);
+    return this.outreachService.createCallLog(req.user.orgId, req.user.userId, body);
   }
 
   @Delete('calls/:id')
@@ -68,7 +68,7 @@ export class OutreachController {
 
   @Post('sequences')
   createSequence(@Request() req: any, @Body() body: any) {
-    return this.outreachService.createSequence(req.user.orgId, req.user.sub, body);
+    return this.outreachService.createSequence(req.user.orgId, req.user.userId, body);
   }
 
   @Patch('sequences/:id')
@@ -89,7 +89,7 @@ export class OutreachController {
     @Request() req: any,
     @Body('prospectIds') prospectIds: string[],
   ) {
-    return this.outreachService.enrollProspects(req.user.orgId, req.user.sub, sequenceId, prospectIds);
+    return this.outreachService.enrollProspects(req.user.orgId, req.user.userId, sequenceId, prospectIds);
   }
 
   @Get('enrollments')
@@ -110,7 +110,7 @@ export class OutreachController {
 
   @Post('templates')
   createTemplate(@Request() req: any, @Body() body: any) {
-    return this.outreachService.createTemplate(req.user.orgId, req.user.sub, body);
+    return this.outreachService.createTemplate(req.user.orgId, req.user.userId, body);
   }
 
   @Patch('templates/:id')
@@ -131,12 +131,12 @@ export class OutreachController {
     @Query('prospectId') prospectId?: string,
     @Query('channel') channel?: string,
   ) {
-    return this.outreachService.getInbox(req.user.orgId, req.user.sub, req.user.role, prospectId, channel);
+    return this.outreachService.getInbox(req.user.orgId, req.user.userId, req.user.role, prospectId, channel);
   }
 
   @Post('inbox')
   addInboxMessage(@Request() req: any, @Body() body: any) {
-    return this.outreachService.addInboxMessage(req.user.orgId, req.user.sub, body);
+    return this.outreachService.addInboxMessage(req.user.orgId, req.user.userId, body);
   }
 
   @Patch('inbox/:id/read')
