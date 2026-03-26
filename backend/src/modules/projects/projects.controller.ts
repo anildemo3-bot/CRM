@@ -108,4 +108,18 @@ export class ProjectsController {
   getMembers(@Request() req: any) {
     return this.projectsService.getMembers(req.user.orgId);
   }
+
+  // ─── AUTO-REASSIGN ────────────────────────────────────────────
+
+  @Post('tasks/auto-reassign')
+  autoReassignOverdue(@Request() req: any) {
+    return this.projectsService.autoReassignOverdue(req.user.orgId);
+  }
+
+  // ─── REPORT ───────────────────────────────────────────────────
+
+  @Get('report')
+  getReport(@Request() req: any) {
+    return this.projectsService.getReport(req.user.orgId);
+  }
 }

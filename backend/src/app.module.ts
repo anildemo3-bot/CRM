@@ -12,10 +12,12 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { KnowledgeModule } from './modules/knowledge/knowledge.module';
 import { PartnersModule } from './modules/partners/partners.module';
 import { OutreachModule } from './modules/outreach/outreach.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    NotificationsModule,
     SharedModule,
     AuthModule,
     CRMModule,
