@@ -1,7 +1,8 @@
 import axios from 'axios';
 
+const rawUrl = process.env.NEXT_PUBLIC_API_URL?.trim() || 'https://crm-backends.onrender.com';
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3010',
+  baseURL: rawUrl,
   headers: { 'Content-Type': 'application/json' },
   timeout: 10000,
 });
