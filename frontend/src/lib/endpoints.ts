@@ -27,13 +27,26 @@ export const dealsApi = {
 export const projectsApi = {
   list: () => api.get("/projects"),
   create: (data: any) => api.post("/projects", data),
+  update: (id: string, data: any) => api.patch(`/projects/${id}`, data),
+  delete: (id: string) => api.delete(`/projects/${id}`),
+  members: () => api.get("/projects/members"),
+  workload: () => api.get("/projects/workload"),
+  dashboard: () => api.get("/projects/dashboard"),
 };
 
 export const tasksApi = {
-  list: () => api.get("/projects/tasks"),
+  list: (projectId?: string) => api.get(`/projects/tasks${projectId ? `?projectId=${projectId}` : ""}`),
   create: (data: any) => api.post("/projects/tasks", data),
-  updateStatus: (id: string, status: string) =>
-    api.patch(`/projects/tasks/${id}`, { status }),
+  update: (id: string, data: any) => api.patch(`/projects/tasks/${id}`, data),
+  updateStatus: (id: string, data: any) => api.patch(`/projects/tasks/${id}`, data),
+  delete: (id: string) => api.delete(`/projects/tasks/${id}`),
+  // Checklist
+  addNote: (taskId: string, content: string) => api.post(`/projects/tasks/${taskId}/notes`, { content }),
+  deleteNote: (noteId: string) => api.delete(`/projects/tasks/notes/${noteId}`),
+  // Time tracking
+  logTime: (data: any) => api.post("/projects/time", data),
+  getTime: (taskId?: string) => api.get(`/projects/time${taskId ? `?taskId=${taskId}` : ""}`),
+  deleteTime: (id: string) => api.delete(`/projects/time/${id}`),
 };
 
 // --- FINANCE ---
@@ -100,22 +113,46 @@ export const knowledgeApi = {
 
 // --- OUTREACH ---
 export const outreachApi = {
+  // Prospects
   prospects: () => api.get("/outreach/prospects"),
   createProspect: (data: any) => api.post("/outreach/prospects", data),
   updateProspect: (id: string, data: any) => api.patch(`/outreach/prospects/${id}`, data),
   deleteProspect: (id: string) => api.delete(`/outreach/prospects/${id}`),
   importProspects: (rows: any[]) => api.post("/outreach/prospects/import", { rows }),
+  assignProspect: (id: string, assigneeId: string) => api.patch(`/outreach/prospects/${id}/assign`, { assigneeId }),
+  // Calls
   calls: () => api.get("/outreach/calls"),
   createCall: (data: any) => api.post("/outreach/calls", data),
   deleteCall: (id: string) => api.delete(`/outreach/calls/${id}`),
+  // Sequences
   sequences: () => api.get("/outreach/sequences"),
   createSequence: (data: any) => api.post("/outreach/sequences", data),
+  updateSequence: (id: string, data: any) => api.patch(`/outreach/sequences/${id}`, data),
   deleteSequence: (id: string) => api.delete(`/outreach/sequences/${id}`),
+  enrollProspects: (sequenceId: string, prospectIds: string[]) =>
+    api.post(`/outreach/sequences/${sequenceId}/enroll`, { prospectIds }),
+  getEnrollments: (prospectId?: string, sequenceId?: string) =>
+    api.get(`/outreach/enrollments${prospectId ? `?prospectId=${prospectId}` : sequenceId ? `?sequenceId=${sequenceId}` : ""}`),
+  // Templates
   templates: () => api.get("/outreach/templates"),
   createTemplate: (data: any) => api.post("/outreach/templates", data),
   updateTemplate: (id: string, data: any) => api.patch(`/outreach/templates/${id}`, data),
   deleteTemplate: (id: string) => api.delete(`/outreach/templates/${id}`),
+  // Inbox
+  inbox: (prospectId?: string, channel?: string) =>
+    api.get(`/outreach/inbox${prospectId ? `?prospectId=${prospectId}` : channel ? `?channel=${channel}` : ""}`),
+  sendMessage: (data: any) => api.post("/outreach/inbox", data),
+  markRead: (id: string) => api.patch(`/outreach/inbox/${id}/read`, {}),
+  // Activity feed
+  activities: (prospectId?: string) =>
+    api.get(`/outreach/activities${prospectId ? `?prospectId=${prospectId}` : ""}`),
+  // SDR stats
+  sdrStats: () => api.get("/outreach/sdr-stats"),
+  // Analytics
   analytics: () => api.get("/outreach/analytics"),
+  // AI
+  generateMessage: (data: any) => api.post("/outreach/ai/generate-message", data),
+  getFollowUps: (prospectId: string) => api.get(`/outreach/ai/follow-ups/${prospectId}`),
 };
 
 // --- PARTNERS ---
