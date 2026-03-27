@@ -408,6 +408,64 @@ export class ProjectsService {
     return { reassigned: reassigned.length, tasks: reassigned };
   }
 
+  // ─── BULK IMPORT + DISTRIBUTE ─────────────────────────────────
+
+  async importTasks(orgId: string, userId: string, rows: any[]) {
+    // Get members for round-robin assignment
+    const members = await this.prisma.user.findMany({
+      where: { organizationId: orgId },
+      select: { id: true, name: true },
+    });
+
+    // Get or create a default project for this org
+    let project = await this.prisma.project.findFirst({
+      where: { organizationId: orgId },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (!project) {
+      project = await this.prisma.project.create({
+        data: { name: 'General', organizationId: orgId, status: 'ACTIVE' },
+      });
+    }
+
+    const created: any[] = [];
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const title = (row['title'] || row['Title'] || '').trim();
+      if (!title) continue;
+
+      const priority = ['URGENT', 'HIGH', 'MEDIUM', 'LOW'].includes(
+        (row['priority'] || row['Priority'] || '').toUpperCase().trim(),
+      )
+        ? (row['priority'] || row['Priority']).toUpperCase().trim()
+        : 'MEDIUM';
+
+      const rawDate = (row['duedate'] || row['dueDate'] || row['DueDate'] || '').trim();
+      const dueDate = rawDate ? new Date(rawDate) : null;
+
+      const assignee = members.length > 0 ? members[i % members.length] : null;
+
+      const task = await this.prisma.task.create({
+        data: {
+          title,
+          description: (row['description'] || row['Description'] || '').trim(),
+          priority,
+          status: 'TODO',
+          projectId: project.id,
+          assigneeId: assignee?.id ?? null,
+          creatorId: userId,
+          dueDate,
+        },
+        include: {
+          assignee: { select: { id: true, name: true } },
+        },
+      });
+      created.push(task);
+    }
+
+    return { imported: created.length, distributed: members.length, tasks: created };
+  }
+
   // ─── REPORTING ────────────────────────────────────────────────
 
   async getReport(orgId: string) {

@@ -109,6 +109,13 @@ export class ProjectsController {
     return this.projectsService.getMembers(req.user.orgId);
   }
 
+  // ─── BULK IMPORT ──────────────────────────────────────────────
+
+  @Post('tasks/import')
+  importTasks(@Request() req: any, @Body('rows') rows: any[]) {
+    return this.projectsService.importTasks(req.user.orgId, req.user.userId, rows || []);
+  }
+
   // ─── AUTO-REASSIGN ────────────────────────────────────────────
 
   @Post('tasks/auto-reassign')
