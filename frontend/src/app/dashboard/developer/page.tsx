@@ -1,18 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Code2, CheckCircle2, AlertTriangle, Play, Eye, Circle,
   Clock, Timer, Award, Loader2, RefreshCw, Zap, ArrowRight,
-  BarChart3, Flag, Target, Layers,
+  BarChart3, Flag, Target, Layers, Upload, Download, FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { tasksApi } from "@/lib/endpoints";
 import { useToast } from "@/components/Toast";
 import { useAuthStore } from "@/lib/store";
 
-const TABS = ["My Today", "All Tasks", "Log Time", "Leaderboard"] as const;
+const TABS = ["My Today", "All Tasks", "Log Time", "Leaderboard", "Import CSV"] as const;
 type Tab = typeof TABS[number];
 
 const ACTIONS = [
@@ -55,6 +55,12 @@ export default function DeveloperPage() {
   // Update modal
   const [updateModal, setUpdateModal] = useState<any>(null);
   const [updateNote, setUpdateNote] = useState("");
+
+  // CSV import
+  const csvRef = useRef<HTMLInputElement>(null);
+  const [csvRows, setCsvRows] = useState<any[]>([]);
+  const [csvImporting, setCsvImporting] = useState(false);
+  const [csvResult, setCsvResult] = useState<{ imported: number; failed: number } | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -114,6 +120,59 @@ export default function DeveloperPage() {
       toast("Failed", "error");
     }
     setLoggingTime(false);
+  };
+
+  const handleCsvFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      const lines = text.trim().split("\n").filter(Boolean);
+      if (lines.length < 2) { toast("CSV must have a header row + data rows", "error"); return; }
+      const headers = lines[0].split(",").map(h => h.trim().replace(/"/g, ""));
+      const rows = lines.slice(1).map(line => {
+        const vals = line.split(",").map(v => v.trim().replace(/"/g, ""));
+        return Object.fromEntries(headers.map((h, i) => [h, vals[i] || ""]));
+      }).filter(r => r.title);
+      setCsvRows(rows);
+      setCsvResult(null);
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
+  const importCsvTasks = async () => {
+    if (!csvRows.length) return;
+    setCsvImporting(true);
+    let imported = 0, failed = 0;
+    for (const row of csvRows) {
+      try {
+        await tasksApi.create({
+          title: row.title,
+          description: row.description || "",
+          priority: ["URGENT","HIGH","MEDIUM","LOW"].includes((row.priority||"").toUpperCase())
+            ? row.priority.toUpperCase() : "MEDIUM",
+          dueDate: row.dueDate || null,
+          status: "TODO",
+        });
+        imported++;
+      } catch { failed++; }
+    }
+    setCsvResult({ imported, failed });
+    setCsvRows([]);
+    setCsvImporting(false);
+    if (imported > 0) { toast(`Imported ${imported} task${imported > 1 ? "s" : ""}`, "success"); load(); }
+    if (failed > 0) toast(`${failed} row${failed > 1 ? "s" : ""} failed`, "error");
+  };
+
+  const downloadTemplate = () => {
+    const csv = "title,description,priority,dueDate\nFix login bug,Users can't log in on mobile,HIGH,2026-04-01\nAdd dark mode,Implement dark mode toggle,MEDIUM,";
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "tasks_template.csv"; a.click();
+    URL.revokeObjectURL(url);
   };
 
   // Stats
@@ -387,6 +446,110 @@ export default function DeveloperPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* ── IMPORT CSV ── */}
+      {tab === "Import CSV" && (
+        <div className="space-y-5">
+          {/* Template download */}
+          <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-2xl p-5">
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div>
+                <p className="text-sm font-bold text-white">Bulk Import Tasks</p>
+                <p className="text-xs text-zinc-500 mt-0.5">
+                  Upload a CSV file to create multiple tasks at once
+                </p>
+              </div>
+              <button
+                onClick={downloadTemplate}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-white text-xs font-semibold transition-all"
+              >
+                <Download size={12} /> Download Template
+              </button>
+            </div>
+
+            {/* CSV columns info */}
+            <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {[
+                { col: "title", req: true, note: "Task name" },
+                { col: "description", req: false, note: "Details" },
+                { col: "priority", req: false, note: "URGENT/HIGH/MEDIUM/LOW" },
+                { col: "dueDate", req: false, note: "YYYY-MM-DD" },
+              ].map(c => (
+                <div key={c.col} className="bg-zinc-800/50 rounded-xl p-3">
+                  <p className="text-xs font-bold text-white font-mono">{c.col}</p>
+                  <p className="text-[10px] text-zinc-500 mt-0.5">{c.note}</p>
+                  {c.req && <span className="text-[10px] text-rose-400 font-bold">required</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Upload area */}
+          <div
+            onClick={() => csvRef.current?.click()}
+            className="border-2 border-dashed border-zinc-700 hover:border-zinc-500 rounded-2xl p-10 text-center cursor-pointer transition-all group"
+          >
+            <Upload size={28} className="mx-auto text-zinc-600 group-hover:text-zinc-400 mb-3 transition-colors" />
+            <p className="text-sm font-semibold text-zinc-400 group-hover:text-white transition-colors">
+              Click to upload CSV file
+            </p>
+            <p className="text-xs text-zinc-600 mt-1">.csv files only</p>
+            <input ref={csvRef} type="file" accept=".csv" onChange={handleCsvFile} className="hidden" />
+          </div>
+
+          {/* Preview */}
+          {csvRows.length > 0 && (
+            <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-2xl p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-bold text-white">
+                  Preview · <span className="text-zinc-400">{csvRows.length} row{csvRows.length > 1 ? "s" : ""}</span>
+                </p>
+                <button onClick={() => setCsvRows([])} className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors">
+                  Clear
+                </button>
+              </div>
+
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {csvRows.map((row, i) => (
+                  <div key={i} className="bg-zinc-800/50 rounded-xl p-3 flex items-center gap-3">
+                    <FileText size={13} className="text-zinc-500 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-white truncate">{row.title}</p>
+                      {row.description && <p className="text-xs text-zinc-500 truncate">{row.description}</p>}
+                    </div>
+                    {row.priority && (
+                      <span className="text-[10px] font-bold text-zinc-400 flex-shrink-0">{row.priority.toUpperCase()}</span>
+                    )}
+                    {row.dueDate && (
+                      <span className="text-[10px] text-amber-500 flex-shrink-0">{row.dueDate}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <button
+                onClick={importCsvTasks}
+                disabled={csvImporting}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all disabled:opacity-50"
+              >
+                {csvImporting ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+                {csvImporting ? "Importing..." : `Import ${csvRows.length} Task${csvRows.length > 1 ? "s" : ""}`}
+              </button>
+            </div>
+          )}
+
+          {/* Result */}
+          {csvResult && (
+            <div className={`rounded-2xl p-4 flex items-center gap-3 ${csvResult.failed === 0 ? "bg-emerald-500/10 border border-emerald-500/20" : "bg-amber-500/10 border border-amber-500/20"}`}>
+              <CheckCircle2 size={16} className={csvResult.failed === 0 ? "text-emerald-400" : "text-amber-400"} />
+              <p className="text-sm font-semibold text-white">
+                {csvResult.imported} imported
+                {csvResult.failed > 0 && `, ${csvResult.failed} failed`}
+              </p>
+            </div>
+          )}
         </div>
       )}
 
