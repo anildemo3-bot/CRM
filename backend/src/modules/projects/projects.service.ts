@@ -438,44 +438,36 @@ export class ProjectsService {
     }
     console.log(`[importTasks] project=${project.id}`);
 
-    const validRows = (rows || []).filter(row => {
-      const title = (row['title'] || row['Title'] || '').trim();
-      return title.length > 0;
-    });
+    const validRows = (rows || []).filter(
+      row => (row['title'] || row['Title'] || '').trim().length > 0,
+    );
     console.log(`[importTasks] validRows=${validRows.length}`);
 
-    const created: any[] = [];
-    for (let i = 0; i < validRows.length; i++) {
-      const row = validRows[i];
-      const title = (row['title'] || row['Title'] || '').trim();
+    const created = await Promise.all(
+      validRows.map((row, i) => {
+        const title = (row['title'] || row['Title'] || '').trim();
+        const rawPriority = (row['priority'] || row['Priority'] || '').toUpperCase().trim();
+        const priority = ['URGENT', 'HIGH', 'MEDIUM', 'LOW'].includes(rawPriority)
+          ? rawPriority : 'MEDIUM';
+        const rawDate = (row['duedate'] || row['dueDate'] || row['DueDate'] || '').trim();
+        const dueDate = rawDate ? new Date(rawDate) : null;
+        const assignee = members.length > 0 ? members[i % members.length] : null;
 
-      const rawPriority = (row['priority'] || row['Priority'] || '').toUpperCase().trim();
-      const priority = ['URGENT', 'HIGH', 'MEDIUM', 'LOW'].includes(rawPriority)
-        ? rawPriority : 'MEDIUM';
-
-      const rawDate = (row['duedate'] || row['dueDate'] || row['DueDate'] || '').trim();
-      const dueDate = rawDate ? new Date(rawDate) : null;
-
-      const assignee = members.length > 0 ? members[i % members.length] : null;
-      console.log(`[importTasks] row ${i}: title="${title}" assignee=${assignee?.name}`);
-
-      const task = await this.prisma.task.create({
-        data: {
-          title,
-          description: (row['description'] || row['Description'] || '').trim(),
-          priority,
-          status: 'TODO',
-          projectId: project.id,
-          assigneeId: assignee?.id ?? null,
-          creatorId: userId,
-          dueDate,
-        },
-        include: {
-          assignee: { select: { id: true, name: true } },
-        },
-      });
-      created.push(task);
-    }
+        return this.prisma.task.create({
+          data: {
+            title,
+            description: (row['description'] || row['Description'] || '').trim(),
+            priority,
+            status: 'TODO',
+            projectId: project.id,
+            assigneeId: assignee?.id ?? null,
+            creatorId: userId,
+            dueDate,
+          },
+          include: { assignee: { select: { id: true, name: true } } },
+        });
+      }),
+    );
 
     console.log(`[importTasks] done: imported=${created.length}`);
     return { imported: created.length, distributed: members.length, tasks: created };
