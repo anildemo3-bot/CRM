@@ -8,7 +8,7 @@ import {
   BarChart3, Flag, Target, Layers, Upload, Download, FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { tasksApi } from "@/lib/endpoints";
+import { tasksApi, projectsApi } from "@/lib/endpoints";
 import { useToast } from "@/components/Toast";
 import { useAuthStore } from "@/lib/store";
 
@@ -61,6 +61,8 @@ export default function DeveloperPage() {
   const [csvRows, setCsvRows] = useState<any[]>([]);
   const [csvImporting, setCsvImporting] = useState(false);
   const [csvResult, setCsvResult] = useState<{ imported: number; failed: number } | null>(null);
+  const [members, setMembers] = useState<any[]>([]);
+  const [membersLoading, setMembersLoading] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -83,6 +85,16 @@ export default function DeveloperPage() {
   };
 
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    if (tab === "Import CSV" && members.length === 0) {
+      setMembersLoading(true);
+      projectsApi.members()
+        .then(res => setMembers(res.data || []))
+        .catch(() => toast("Failed to load developers", "error"))
+        .finally(() => setMembersLoading(false));
+    }
+  }, [tab]);
 
   const updateStatus = async (taskId: string, status: string, note?: string) => {
     setUpdatingId(taskId);
@@ -131,10 +143,18 @@ export default function DeveloperPage() {
       const lines = text.trim().split("\n").filter(Boolean);
       if (lines.length < 2) { toast("CSV must have a header row + data rows", "error"); return; }
       const headers = lines[0].split(",").map(h => h.trim().replace(/"/g, ""));
-      const rows = lines.slice(1).map(line => {
+      const parsed = lines.slice(1).map(line => {
         const vals = line.split(",").map(v => v.trim().replace(/"/g, ""));
         return Object.fromEntries(headers.map((h, i) => [h, vals[i] || ""]));
-      }).filter(r => r.title);
+      }).filter((r: any) => r.title);
+
+      // Round-robin assign to available developers
+      const devs = members.length > 0 ? members : [];
+      const rows = parsed.map((r: any, i: number) => ({
+        ...r,
+        _assignee: devs.length > 0 ? devs[i % devs.length] : null,
+      }));
+
       setCsvRows(rows);
       setCsvResult(null);
     };
@@ -151,10 +171,11 @@ export default function DeveloperPage() {
         await tasksApi.create({
           title: row.title,
           description: row.description || "",
-          priority: ["URGENT","HIGH","MEDIUM","LOW"].includes((row.priority||"").toUpperCase())
+          priority: ["URGENT","HIGH","MEDIUM","LOW"].includes((row.priority || "").toUpperCase())
             ? row.priority.toUpperCase() : "MEDIUM",
           dueDate: row.dueDate || null,
           status: "TODO",
+          assigneeId: row._assignee?.id || undefined,
         });
         imported++;
       } catch { failed++; }
@@ -162,7 +183,7 @@ export default function DeveloperPage() {
     setCsvResult({ imported, failed });
     setCsvRows([]);
     setCsvImporting(false);
-    if (imported > 0) { toast(`Imported ${imported} task${imported > 1 ? "s" : ""}`, "success"); load(); }
+    if (imported > 0) { toast(`Imported ${imported} task${imported > 1 ? "s" : ""} — assigned to ${members.length} developer${members.length !== 1 ? "s" : ""}`, "success"); load(); }
     if (failed > 0) toast(`${failed} row${failed > 1 ? "s" : ""} failed`, "error");
   };
 
@@ -458,7 +479,7 @@ export default function DeveloperPage() {
               <div>
                 <p className="text-sm font-bold text-white">Bulk Import Tasks</p>
                 <p className="text-xs text-zinc-500 mt-0.5">
-                  Upload a CSV file to create multiple tasks at once
+                  Tasks are auto-assigned round-robin to all {membersLoading ? "..." : members.length} available developer{members.length !== 1 ? "s" : ""}
                 </p>
               </div>
               <button
@@ -468,6 +489,21 @@ export default function DeveloperPage() {
                 <Download size={12} /> Download Template
               </button>
             </div>
+
+            {/* Developer avatars */}
+            {members.length > 0 && (
+              <div className="mt-4 flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Assigning to:</span>
+                {members.map((m, i) => (
+                  <div key={m.id} className="flex items-center gap-1.5 bg-zinc-800/60 rounded-full px-2.5 py-1">
+                    <div className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-[9px] font-black text-white flex-shrink-0">
+                      {m.name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
+                    </div>
+                    <span className="text-[10px] text-zinc-300 font-semibold">{m.name.split(" ")[0]}</span>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* CSV columns info */}
             <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -524,6 +560,14 @@ export default function DeveloperPage() {
                     )}
                     {row.dueDate && (
                       <span className="text-[10px] text-amber-500 flex-shrink-0">{row.dueDate}</span>
+                    )}
+                    {row._assignee && (
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <div className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-[9px] font-black text-white">
+                          {row._assignee.name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
+                        </div>
+                        <span className="text-[10px] text-zinc-400">{row._assignee.name.split(" ")[0]}</span>
+                      </div>
                     )}
                   </div>
                 ))}
