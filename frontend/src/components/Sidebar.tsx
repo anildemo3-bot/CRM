@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Users, FolderKanban, CreditCard,
   Settings, LogOut, BarChart3, CheckSquare, Sparkles,
   Briefcase, Phone, Megaphone, Brain, BookOpen,
-  Handshake, Cpu, TrendingUp, ChevronDown, Rocket, Zap, PhoneCall
+  Handshake, Cpu, TrendingUp, ChevronDown, Rocket, Zap, PhoneCall, Code2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -50,6 +50,7 @@ const navGroups = [
     items: [
       { name: "Projects", icon: FolderKanban, href: "/dashboard/projects" },
       { name: "Task Board", icon: CheckSquare, href: "/dashboard/tasks" },
+      { name: "Developer", icon: Code2, href: "/dashboard/developer" },
       { name: "Resources", icon: Cpu, href: "/dashboard/resources" },
     ],
   },

@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, X, User, Briefcase, Calendar, FileText, Star, Search, Filter, MoreHorizontal, UserCheck, UserPlus, FileCheck, Clock, DollarSign, ArrowUpRight, Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Plus, X, User, Briefcase, Calendar, FileText, Star, Search, Filter, MoreHorizontal, UserCheck, UserPlus, FileCheck, Clock, DollarSign, ArrowUpRight, Loader2, CheckCircle2, AlertTriangle, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/Toast";
-import { employeesApi } from "@/lib/endpoints";
+import { employeesApi, tasksApi } from "@/lib/endpoints";
 
-type OpsTab = "hr" | "recruitment" | "contracts" | "attendance" | "payroll";
+type OpsTab = "hr" | "recruitment" | "contracts" | "attendance" | "payroll" | "activitylog";
 
 const SEED_EMPLOYEES = [
   { id: "e1", name: "Sarah Johnson", role: "Senior Developer", dept: "Engineering", status: "Active", email: "sarah@niche.com", joiningDate: "2023-01-15", salary: 8500 },
@@ -59,6 +59,8 @@ export default function OperationsPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showContractModal, setShowContractModal] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [activityLog, setActivityLog] = useState<any[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
   const [empForm, setEmpForm] = useState({ name: "", role: "", dept: "", email: "", salary: "" });
   const [contractForm, setContractForm] = useState({ name: "", client: "", value: "", expires: "" });
   const [contracts, setContracts] = useState(CONTRACTS);
@@ -68,6 +70,40 @@ export default function OperationsPage() {
       .then(res => { if (res.data?.length) setEmployees(res.data.map((e: any) => ({ ...e, salary: e.salary ?? 0 }))); })
       .catch(() => {});
   }, []);
+
+  const loadActivity = async () => {
+    if (activityLog.length > 0) return;
+    setActivityLoading(true);
+    try {
+      const [tasksRes, timeRes] = await Promise.all([
+        tasksApi.list(),
+        tasksApi.getTime(),
+      ]);
+      const tasks = (tasksRes.data || []).map((t: any) => ({
+        id: `task-${t.id}`,
+        type: "task",
+        employee: t.assignee?.name || "Unassigned",
+        action: t.status === "DONE" ? "Completed task" : t.status === "IN_PROGRESS" ? "Started task" : "Updated task",
+        subject: t.title,
+        status: t.status,
+        time: t.updatedAt || t.createdAt,
+      }));
+      const times = (timeRes.data || []).map((e: any) => ({
+        id: `time-${e.id}`,
+        type: "time",
+        employee: e.user?.name || "Unknown",
+        action: `Logged ${e.hours}h`,
+        subject: e.task?.title || "Task",
+        status: "LOGGED",
+        time: e.createdAt,
+      }));
+      const combined = [...tasks, ...times].sort(
+        (a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()
+      );
+      setActivityLog(combined);
+    } catch { /* silent */ }
+    setActivityLoading(false);
+  };
 
   const handleAddEmployee = async () => {
     if (!empForm.name || !empForm.role) return;
@@ -101,6 +137,7 @@ export default function OperationsPage() {
     { id: "contracts", label: "Legal", icon: FileCheck },
     { id: "attendance", label: "Attendance", icon: Calendar },
     { id: "payroll", label: "Payroll", icon: DollarSign },
+    { id: "activitylog", label: "Activity Log", icon: Activity },
   ];
 
   const totalPayroll = employees.filter(e => (e.status ?? "Active") === "Active").reduce((s, e) => s + (e.salary ?? 0), 0);
@@ -116,13 +153,13 @@ export default function OperationsPage() {
         <div className="flex items-center gap-3">
           <div className="flex bg-zinc-900 border border-zinc-800 rounded-xl p-1">
             {TABS.map(t => (
-              <button key={t.id} onClick={() => setTab(t.id as OpsTab)}
+              <button key={t.id} onClick={() => { setTab(t.id as OpsTab); if (t.id === "activitylog") loadActivity(); }}
                 className={cn("px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1.5", tab === t.id ? "bg-zinc-800 text-white shadow-lg" : "text-zinc-500 hover:text-zinc-300")}>
                 <t.icon size={12} /><span className="hidden sm:inline">{t.label}</span>
               </button>
             ))}
           </div>
-          <button onClick={() => tab === "contracts" ? setShowContractModal(true) : setShowAddModal(true)}
+          <button onClick={() => { if (tab === "activitylog") { loadActivity(); return; } tab === "contracts" ? setShowContractModal(true) : setShowAddModal(true); }}
             className="bg-white hover:bg-zinc-200 text-black px-4 py-2 rounded-xl text-sm font-bold transition-all shadow-lg flex items-center gap-2">
             <Plus size={16} strokeWidth={3} />
             <span>{tab === "contracts" ? "New Contract" : "Add Entity"}</span>
@@ -381,6 +418,114 @@ export default function OperationsPage() {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* ── ACTIVITY LOG ── */}
+      {tab === "activitylog" && (
+        <div className="space-y-4">
+          {/* Per-employee summary */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {employees.slice(0, 4).map((emp, i) => {
+              const empActivity = activityLog.filter(a => a.employee === emp.name);
+              const done = empActivity.filter(a => a.status === "DONE").length;
+              const hours = activityLog.filter(a => a.type === "time" && a.employee === emp.name)
+                .reduce((s: number, e: any) => {
+                  const match = e.action.match(/[\d.]+/);
+                  return s + (match ? parseFloat(match[0]) : 0);
+                }, 0);
+              return (
+                <div key={emp.id} className="bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-zinc-600 to-zinc-800 flex items-center justify-center text-[10px] font-bold text-zinc-300">
+                      {emp.name?.split(" ").map((n: string) => n[0]).join("") ?? "?"}
+                    </div>
+                    <p className="text-xs font-semibold text-white truncate">{emp.name?.split(" ")[0]}</p>
+                  </div>
+                  <div className="flex gap-3">
+                    <div>
+                      <p className="text-[10px] text-zinc-600">Done</p>
+                      <p className="text-sm font-black text-emerald-400">{done}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-zinc-600">Hours</p>
+                      <p className="text-sm font-black text-blue-400">{hours.toFixed(1)}</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Refresh */}
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-zinc-500">{activityLog.length} activity entries</p>
+            <button
+              onClick={() => { setActivityLog([]); loadActivity(); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white text-xs font-semibold transition-all"
+            >
+              <Activity size={12} />
+              Refresh
+            </button>
+          </div>
+
+          {/* Feed */}
+          {activityLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="animate-spin text-zinc-600" size={24} />
+            </div>
+          ) : activityLog.length === 0 ? (
+            <div className="text-center py-16 text-zinc-600">
+              <Activity size={32} className="mx-auto mb-3 opacity-30" />
+              <p className="text-sm font-semibold">No activity yet</p>
+              <p className="text-xs mt-1">Task and time data will appear here</p>
+            </div>
+          ) : (
+            <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-2xl overflow-hidden">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-zinc-950/20 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+                    <th className="px-5 py-3">Employee</th>
+                    <th className="px-5 py-3">Action</th>
+                    <th className="px-5 py-3">Task / Subject</th>
+                    <th className="px-5 py-3">Status</th>
+                    <th className="px-5 py-3">Time</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-800/40">
+                  {activityLog.slice(0, 50).map(entry => (
+                    <tr key={entry.id} className="hover:bg-zinc-800/20 transition-colors">
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-zinc-600 to-zinc-800 flex items-center justify-center text-[9px] font-bold text-zinc-300 flex-shrink-0">
+                            {entry.employee?.split(" ").map((n: string) => n[0]).join("") ?? "?"}
+                          </div>
+                          <p className="text-xs font-semibold text-white">{entry.employee}</p>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3 text-xs text-zinc-400">{entry.action}</td>
+                      <td className="px-5 py-3 text-xs text-zinc-300 max-w-[200px] truncate">{entry.subject}</td>
+                      <td className="px-5 py-3">
+                        <span className={cn(
+                          "text-[9px] font-black uppercase px-2 py-0.5 rounded-md border",
+                          entry.status === "DONE" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
+                          entry.status === "IN_PROGRESS" ? "bg-blue-500/10 text-blue-400 border-blue-500/20" :
+                          entry.status === "BLOCKED" ? "bg-rose-500/10 text-rose-400 border-rose-500/20" :
+                          entry.status === "LOGGED" ? "bg-violet-500/10 text-violet-400 border-violet-500/20" :
+                          "bg-zinc-800 text-zinc-500 border-zinc-700"
+                        )}>
+                          {entry.status?.replace(/_/g, " ")}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3 text-[10px] text-zinc-600">
+                        {entry.time ? new Date(entry.time).toLocaleDateString() : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
