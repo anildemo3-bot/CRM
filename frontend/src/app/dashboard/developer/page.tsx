@@ -65,6 +65,8 @@ export default function DeveloperPage() {
   const [projects, setProjects] = useState<any[]>([]);
   const [csvProjectId, setCsvProjectId] = useState("");
   const [csvLoading, setCsvLoading] = useState(false);
+  const [manualForm, setManualForm] = useState({ title: "", description: "", priority: "MEDIUM", dueDate: "", assigneeId: "" });
+  const [manualSubmitting, setManualSubmitting] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -139,31 +141,48 @@ export default function DeveloperPage() {
     setLoggingTime(false);
   };
 
+  const parseCSV = (raw: string): Record<string, string>[] => {
+    // Normalize line endings (handles Windows \r\n and old Mac \r), strip BOM
+    const text = raw.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    const lines = text.split("\n").filter(l => l.trim());
+    if (lines.length < 2) return [];
+
+    // Tokenize one CSV line — handles quoted fields with commas inside
+    const tokenize = (line: string): string[] => {
+      const out: string[] = [];
+      let cur = "", inQ = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') { inQ = !inQ; }
+        else if (ch === "," && !inQ) { out.push(cur.trim()); cur = ""; }
+        else { cur += ch; }
+      }
+      out.push(cur.trim());
+      return out;
+    };
+
+    const headers = tokenize(lines[0]).map(h => h.toLowerCase().trim());
+    return lines.slice(1).map(line => {
+      const vals = tokenize(line);
+      return Object.fromEntries(headers.map((h, i) => [h, vals[i] ?? ""]));
+    }).filter(r => r["title"]?.trim());
+  };
+
   const handleCsvFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!csvProjectId) { toast("Please select a project first", "error"); e.target.value = ""; return; }
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
-      const text = ev.target?.result as string;
-      const lines = text.trim().split("\n").filter(Boolean);
-      if (lines.length < 2) { toast("CSV must have a header row and at least one data row", "error"); return; }
-      const headers = lines[0].split(",").map(h => h.trim().replace(/"/g, ""));
-      const parsed = lines.slice(1).map(line => {
-        const vals = line.split(",").map(v => v.trim().replace(/"/g, ""));
-        return Object.fromEntries(headers.map((h, i) => [h, vals[i] || ""]));
-      }).filter((r: any) => r.title?.trim());
-
-      if (parsed.length === 0) { toast("No valid rows found — make sure the 'title' column has values", "error"); return; }
-
-      // Round-robin assign across all developers
-      const rows = parsed.map((r: any, i: number) => ({
+      const parsed = parseCSV(ev.target?.result as string);
+      if (parsed.length === 0) { toast("No valid rows — make sure the file has a 'title' column with values", "error"); return; }
+      const rows = parsed.map((r, i) => ({
         ...r,
         _assignee: members.length > 0 ? members[i % members.length] : null,
       }));
       setCsvRows(rows);
       setCsvResult(null);
-      toast(`${rows.length} task${rows.length > 1 ? "s" : ""} ready — check the preview below`, "success");
+      toast(`${rows.length} task${rows.length > 1 ? "s" : ""} ready — review below then click Import`, "success");
     };
     reader.readAsText(file);
     e.target.value = "";
@@ -175,12 +194,12 @@ export default function DeveloperPage() {
     let imported = 0, failed = 0;
     for (const row of csvRows) {
       try {
+        const pri = (row["priority"] || row["Priority"] || "").toUpperCase().trim();
         await tasksApi.create({
-          title: row.title.trim(),
-          description: row.description?.trim() || "",
-          priority: ["URGENT", "HIGH", "MEDIUM", "LOW"].includes((row.priority || "").toUpperCase().trim())
-            ? row.priority.toUpperCase().trim() : "MEDIUM",
-          dueDate: row.dueDate?.trim() || null,
+          title: (row["title"] || row["Title"] || "").trim(),
+          description: (row["description"] || row["Description"] || "").trim(),
+          priority: ["URGENT", "HIGH", "MEDIUM", "LOW"].includes(pri) ? pri : "MEDIUM",
+          dueDate: (row["duedate"] || row["dueDate"] || row["DueDate"] || "").trim() || null,
           status: "TODO",
           projectId: csvProjectId,
           assigneeId: row._assignee?.id || null,
@@ -196,6 +215,28 @@ export default function DeveloperPage() {
       load();
     }
     if (failed > 0) toast(`${failed} row${failed > 1 ? "s" : ""} failed to import`, "error");
+  };
+
+  const submitManualTask = async () => {
+    if (!manualForm.title.trim() || !csvProjectId) return;
+    setManualSubmitting(true);
+    try {
+      await tasksApi.create({
+        title: manualForm.title.trim(),
+        description: manualForm.description.trim(),
+        priority: manualForm.priority,
+        dueDate: manualForm.dueDate || null,
+        status: "TODO",
+        projectId: csvProjectId,
+        assigneeId: manualForm.assigneeId || null,
+      });
+      toast("Task created!", "success");
+      setManualForm({ title: "", description: "", priority: "MEDIUM", dueDate: "", assigneeId: "" });
+      load();
+    } catch {
+      toast("Failed to create task", "error");
+    }
+    setManualSubmitting(false);
   };
 
   const downloadTemplate = () => {
@@ -602,14 +643,14 @@ export default function DeveloperPage() {
                       <div key={i} className="bg-zinc-800/50 rounded-xl p-3 flex items-center gap-3">
                         <span className="text-[10px] text-zinc-600 w-4 flex-shrink-0 font-mono">{i + 1}</span>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-white truncate">{row.title}</p>
-                          {row.description && <p className="text-xs text-zinc-500 truncate">{row.description}</p>}
+                          <p className="text-sm font-semibold text-white truncate">{row["title"]}</p>
+                          {row["description"] && <p className="text-xs text-zinc-500 truncate">{row["description"]}</p>}
                         </div>
-                        {row.priority && (
-                          <span className="text-[10px] font-bold text-zinc-500 flex-shrink-0">{row.priority.toUpperCase()}</span>
+                        {row["priority"] && (
+                          <span className="text-[10px] font-bold text-zinc-500 flex-shrink-0">{row["priority"].toUpperCase()}</span>
                         )}
-                        {row.dueDate && (
-                          <span className="text-[10px] text-amber-500 flex-shrink-0">{row.dueDate}</span>
+                        {(row["duedate"] || row["dueDate"]) && (
+                          <span className="text-[10px] text-amber-500 flex-shrink-0">{row["duedate"] || row["dueDate"]}</span>
                         )}
                         {row._assignee ? (
                           <div className="flex items-center gap-1.5 flex-shrink-0 bg-blue-500/10 rounded-full px-2 py-0.5">
@@ -655,6 +696,84 @@ export default function DeveloperPage() {
                   </div>
                 </div>
               )}
+
+              {/* Manual entry */}
+              <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-2xl p-5 space-y-4">
+                <p className="text-sm font-bold text-white">Or Add a Single Task Manually</p>
+
+                <div>
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Title <span className="text-rose-400">*</span></label>
+                  <input
+                    type="text"
+                    value={manualForm.title}
+                    onChange={e => setManualForm(p => ({ ...p, title: e.target.value }))}
+                    placeholder="e.g. Fix login page bug"
+                    className="w-full mt-1.5 bg-zinc-800/60 border border-zinc-700/60 rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-zinc-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Description</label>
+                  <input
+                    type="text"
+                    value={manualForm.description}
+                    onChange={e => setManualForm(p => ({ ...p, description: e.target.value }))}
+                    placeholder="Optional details"
+                    className="w-full mt-1.5 bg-zinc-800/60 border border-zinc-700/60 rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-zinc-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Priority</label>
+                    <select
+                      value={manualForm.priority}
+                      onChange={e => setManualForm(p => ({ ...p, priority: e.target.value }))}
+                      className="w-full mt-1.5 bg-zinc-800/60 border border-zinc-700/60 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-zinc-500"
+                    >
+                      <option value="URGENT">Urgent</option>
+                      <option value="HIGH">High</option>
+                      <option value="MEDIUM">Medium</option>
+                      <option value="LOW">Low</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Due Date</label>
+                    <input
+                      type="date"
+                      value={manualForm.dueDate}
+                      onChange={e => setManualForm(p => ({ ...p, dueDate: e.target.value }))}
+                      className="w-full mt-1.5 bg-zinc-800/60 border border-zinc-700/60 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-zinc-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Assign To</label>
+                  <select
+                    value={manualForm.assigneeId}
+                    onChange={e => setManualForm(p => ({ ...p, assigneeId: e.target.value }))}
+                    className="w-full mt-1.5 bg-zinc-800/60 border border-zinc-700/60 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-zinc-500"
+                  >
+                    <option value="">Unassigned</option>
+                    {members.map(m => (
+                      <option key={m.id} value={m.id}>{m.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  onClick={submitManualTask}
+                  disabled={manualSubmitting || !manualForm.title.trim() || !csvProjectId}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all disabled:opacity-50"
+                >
+                  {manualSubmitting ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
+                  Add Task
+                </button>
+                {!csvProjectId && (
+                  <p className="text-[10px] text-zinc-600">Select a project above to enable manual entry</p>
+                )}
+              </div>
             </>
           )}
         </div>
