@@ -3,41 +3,47 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Code2, Clock, CheckCircle2, AlertTriangle, Play, Pause, BarChart3,
-  Loader2, Plus, ChevronRight, Timer, Zap, Target, Flag, RefreshCw,
-  ArrowRight, Circle, XCircle, Eye,
+  Code2, CheckCircle2, AlertTriangle, Play, Eye, Circle,
+  Clock, Timer, Award, Loader2, RefreshCw, Zap, ArrowRight,
+  BarChart3, Flag, Target, Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { tasksApi } from "@/lib/endpoints";
 import { useToast } from "@/components/Toast";
 import { useAuthStore } from "@/lib/store";
 
-const TABS = ["My Tasks", "Today's Focus", "Log Time", "My Stats"] as const;
+const TABS = ["My Today", "All Tasks", "Log Time", "Leaderboard"] as const;
 type Tab = typeof TABS[number];
 
-const STATUS_ORDER = ["TODO", "IN_PROGRESS", "REVIEW", "DONE", "BLOCKED"];
+const ACTIONS = [
+  { key: "IN_PROGRESS", label: "Start",       icon: Play,          color: "bg-blue-600 hover:bg-blue-500",     text: "text-white" },
+  { key: "REVIEW",      label: "Send Review", icon: Eye,           color: "bg-violet-600 hover:bg-violet-500", text: "text-white" },
+  { key: "DONE",        label: "Mark Done",   icon: CheckCircle2,  color: "bg-emerald-600 hover:bg-emerald-500",text: "text-white" },
+  { key: "BLOCKED",     label: "Blocked",     icon: AlertTriangle, color: "bg-rose-600 hover:bg-rose-500",     text: "text-white" },
+];
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: any }> = {
-  TODO:        { label: "To Do",      color: "text-zinc-400",   bg: "bg-zinc-500/20 border-zinc-500/30",   icon: Circle },
-  IN_PROGRESS: { label: "In Progress",color: "text-blue-400",   bg: "bg-blue-500/20 border-blue-500/30",   icon: Play },
-  REVIEW:      { label: "In Review",  color: "text-violet-400", bg: "bg-violet-500/20 border-violet-500/30",icon: Eye },
-  DONE:        { label: "Done",       color: "text-emerald-400",bg: "bg-emerald-500/20 border-emerald-500/30",icon: CheckCircle2 },
-  BLOCKED:     { label: "Blocked",    color: "text-rose-400",   bg: "bg-rose-500/20 border-rose-500/30",   icon: AlertTriangle },
+const STATUS_COLORS: Record<string, string> = {
+  TODO:        "bg-zinc-500/20 text-zinc-400 border-zinc-500/30",
+  IN_PROGRESS: "bg-blue-500/20 text-blue-400 border-blue-500/30",
+  REVIEW:      "bg-violet-500/20 text-violet-400 border-violet-500/30",
+  DONE:        "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+  BLOCKED:     "bg-rose-500/20 text-rose-400 border-rose-500/30",
 };
 
-const PRIORITY_CONFIG: Record<string, { label: string; color: string }> = {
-  URGENT:  { label: "Urgent",  color: "text-rose-400 bg-rose-500/20 border-rose-500/30" },
-  HIGH:    { label: "High",    color: "text-orange-400 bg-orange-500/20 border-orange-500/30" },
-  MEDIUM:  { label: "Medium",  color: "text-amber-400 bg-amber-500/20 border-amber-500/30" },
-  LOW:     { label: "Low",     color: "text-zinc-500 bg-zinc-500/20 border-zinc-500/30" },
+const PRIORITY_DOT: Record<string, string> = {
+  URGENT: "bg-rose-500",
+  HIGH:   "bg-orange-500",
+  MEDIUM: "bg-amber-400",
+  LOW:    "bg-zinc-600",
 };
 
 export default function DeveloperPage() {
   const { toast } = useToast();
   const { user } = useAuthStore();
-  const [tab, setTab] = useState<Tab>("My Tasks");
+  const [tab, setTab] = useState<Tab>("My Today");
 
-  const [tasks, setTasks] = useState<any[]>([]);
+  const [myTasks, setMyTasks] = useState<any[]>([]);
+  const [allTasks, setAllTasks] = useState<any[]>([]);
   const [timeEntries, setTimeEntries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
@@ -46,6 +52,10 @@ export default function DeveloperPage() {
   const [timeForm, setTimeForm] = useState({ taskId: "", hours: "", description: "" });
   const [loggingTime, setLoggingTime] = useState(false);
 
+  // Update modal
+  const [updateModal, setUpdateModal] = useState<any>(null);
+  const [updateNote, setUpdateNote] = useState("");
+
   const load = async () => {
     setLoading(true);
     try {
@@ -53,27 +63,35 @@ export default function DeveloperPage() {
         tasksApi.list(),
         tasksApi.getTime(),
       ]);
-      const allTasks = tasksRes.data || [];
-      // Show only tasks assigned to me
-      const myTasks = user?.id
-        ? allTasks.filter((t: any) => t.assigneeId === user.id || t.assignee?.id === user.id)
-        : allTasks;
-      setTasks(myTasks);
+      const tasks: any[] = tasksRes.data || [];
+      const mine = tasks.filter((t: any) =>
+        t.assigneeId === user?.id || t.assignee?.id === user?.id
+      );
+      setMyTasks(mine);
+      setAllTasks(tasks);
       setTimeEntries(timeRes.data || []);
     } catch {
-      toast("Failed to load tasks", "error");
+      toast("Failed to load", "error");
     }
     setLoading(false);
   };
 
   useEffect(() => { load(); }, []);
 
-  const updateStatus = async (taskId: string, status: string) => {
+  const updateStatus = async (taskId: string, status: string, note?: string) => {
     setUpdatingId(taskId);
     try {
-      await tasksApi.updateStatus(taskId, { status });
-      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status } : t));
-      toast(`Moved to ${STATUS_CONFIG[status]?.label}`, "success");
+      await tasksApi.updateStatus(taskId, { status, note });
+      setMyTasks(prev => prev.map(t => t.id === taskId ? { ...t, status } : t));
+      toast(
+        status === "DONE" ? "Task completed!" :
+        status === "BLOCKED" ? "Marked as blocked" :
+        status === "REVIEW" ? "Sent for review" :
+        "Status updated",
+        status === "BLOCKED" ? "error" : "success"
+      );
+      setUpdateModal(null);
+      setUpdateNote("");
     } catch {
       toast("Update failed", "error");
     }
@@ -91,19 +109,32 @@ export default function DeveloperPage() {
       });
       toast("Time logged!", "success");
       setTimeForm({ taskId: "", hours: "", description: "" });
-      await load();
+      load();
     } catch {
-      toast("Failed to log time", "error");
+      toast("Failed", "error");
     }
     setLoggingTime(false);
   };
 
-  const myTime = timeEntries.filter((e: any) => !user?.id || e.userId === user.id || e.user?.id === user.id);
+  // Stats
+  const done       = myTasks.filter(t => t.status === "DONE").length;
+  const inProgress = myTasks.filter(t => t.status === "IN_PROGRESS").length;
+  const blocked    = myTasks.filter(t => t.status === "BLOCKED").length;
+  const todo       = myTasks.filter(t => t.status === "TODO").length;
+  const progress   = myTasks.length > 0 ? Math.round((done / myTasks.length) * 100) : 0;
+  const myTime     = timeEntries.filter((e: any) => !user?.id || e.userId === user.id || e.user?.id === user.id);
   const totalHours = myTime.reduce((s: number, e: any) => s + (e.hours || 0), 0);
-  const doneCount = tasks.filter(t => t.status === "DONE").length;
-  const inProgressTasks = tasks.filter(t => t.status === "IN_PROGRESS");
-  const blockedTasks = tasks.filter(t => t.status === "BLOCKED");
-  const todayFocus = tasks.filter(t => ["IN_PROGRESS", "TODO"].includes(t.status) && t.priority !== "LOW");
+
+  // Leaderboard: group by assignee
+  const devMap: Record<string, { name: string; done: number; inProgress: number; tasks: number }> = {};
+  allTasks.forEach((t: any) => {
+    const name = t.assignee?.name || "Unassigned";
+    if (!devMap[name]) devMap[name] = { name, done: 0, inProgress: 0, tasks: 0 };
+    devMap[name].tasks++;
+    if (t.status === "DONE") devMap[name].done++;
+    if (t.status === "IN_PROGRESS") devMap[name].inProgress++;
+  });
+  const leaderboard = Object.values(devMap).sort((a, b) => b.done - a.done);
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -117,26 +148,14 @@ export default function DeveloperPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-white">Developer Dashboard</h1>
-          <p className="text-xs text-zinc-500 mt-0.5">Your tasks, time, and daily focus</p>
+          <p className="text-xs text-zinc-500 mt-0.5">Your daily task queue</p>
         </div>
-        <button onClick={load} className="p-2 rounded-xl border border-zinc-800 hover:border-zinc-700 text-zinc-500 hover:text-zinc-300 transition-all">
+        <button
+          onClick={load}
+          className="p-2 rounded-xl border border-zinc-800 hover:border-zinc-700 text-zinc-500 hover:text-zinc-300 transition-all"
+        >
           <RefreshCw size={14} />
         </button>
-      </div>
-
-      {/* Quick stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          { label: "My Tasks",    value: tasks.length,            color: "text-white" },
-          { label: "In Progress", value: inProgressTasks.length,  color: "text-blue-400" },
-          { label: "Blocked",     value: blockedTasks.length,     color: "text-rose-400" },
-          { label: "Done",        value: doneCount,               color: "text-emerald-400" },
-        ].map(s => (
-          <div key={s.label} className="bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-4">
-            <p className="text-[10px] text-zinc-500 uppercase tracking-widest">{s.label}</p>
-            <p className={cn("text-2xl font-black mt-1", s.color)}>{s.value}</p>
-          </div>
-        ))}
       </div>
 
       {/* Tabs */}
@@ -155,94 +174,125 @@ export default function DeveloperPage() {
         ))}
       </div>
 
-      {/* ── MY TASKS ── */}
-      {tab === "My Tasks" && (
-        <div className="space-y-3">
-          {tasks.length === 0 ? (
+      {/* ── MY TODAY ── */}
+      {tab === "My Today" && (
+        <div className="space-y-5">
+          {/* Stats bar */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            {[
+              { label: "My Tasks",    value: myTasks.length, color: "text-white" },
+              { label: "To Do",       value: todo,           color: "text-zinc-400" },
+              { label: "In Progress", value: inProgress,     color: "text-blue-400" },
+              { label: "In Review",   value: myTasks.filter(t => t.status === "REVIEW").length, color: "text-violet-400" },
+              { label: "Done",        value: done,           color: "text-emerald-400" },
+            ].map(s => (
+              <div key={s.label} className="bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-4">
+                <p className="text-[10px] text-zinc-500 uppercase tracking-widest">{s.label}</p>
+                <p className={cn("text-2xl font-black mt-1", s.color)}>{s.value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Progress */}
+          <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-zinc-400">Task Progress</span>
+              <span className="text-xs font-black text-white">{progress}%</span>
+            </div>
+            <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${progress}%` }}
+                transition={{ duration: 0.8, ease: "easeOut" }}
+                className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full"
+              />
+            </div>
+            <p className="text-[10px] text-zinc-600 mt-1">{done} of {myTasks.length} tasks completed</p>
+          </div>
+
+          {/* Blocked warning */}
+          {blocked > 0 && (
+            <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-3 flex items-center gap-3">
+              <AlertTriangle size={16} className="text-rose-400 flex-shrink-0" />
+              <p className="text-xs text-rose-300 font-semibold">
+                {blocked} blocked task{blocked > 1 ? "s" : ""} — needs attention
+              </p>
+            </div>
+          )}
+
+          {/* Task cards */}
+          {myTasks.length === 0 ? (
             <div className="text-center py-16 text-zinc-600">
               <Code2 size={32} className="mx-auto mb-3 opacity-30" />
-              <p className="text-sm font-semibold">No tasks assigned to you yet</p>
+              <p className="text-sm font-semibold">No tasks assigned to you</p>
+              <p className="text-xs mt-1">Ask your manager to assign tasks from the Task Board</p>
             </div>
-          ) : STATUS_ORDER.filter(s => tasks.some(t => t.status === s)).map(status => {
-            const grouped = tasks.filter(t => t.status === status);
-            const cfg = STATUS_CONFIG[status];
-            const Icon = cfg.icon;
-            return (
-              <div key={status} className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Icon size={13} className={cfg.color} />
-                  <p className={cn("text-xs font-bold uppercase tracking-widest", cfg.color)}>
-                    {cfg.label} <span className="text-zinc-600">({grouped.length})</span>
-                  </p>
-                </div>
-                {grouped.map(task => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    onStatusChange={updateStatus}
-                    updating={updatingId === task.id}
-                  />
-                ))}
-              </div>
-            );
-          })}
+          ) : (
+            <div className="grid gap-3">
+              {[...myTasks].sort((a, b) => {
+                const order: Record<string, number> = { BLOCKED: 0, IN_PROGRESS: 1, REVIEW: 2, TODO: 3, DONE: 4 };
+                const pa: Record<string, number> = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+                if (order[a.status] !== order[b.status]) return order[a.status] - order[b.status];
+                return (pa[a.priority] ?? 2) - (pa[b.priority] ?? 2);
+              }).map(task => (
+                <DevTaskCard
+                  key={task.id}
+                  task={task}
+                  onAction={(t, action) => {
+                    if (["BLOCKED", "DONE", "REVIEW"].includes(action)) {
+                      setUpdateModal({ task: t, action });
+                      setUpdateNote("");
+                    } else {
+                      updateStatus(t.id, action);
+                    }
+                  }}
+                  updating={updatingId === task.id}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      {/* ── TODAY'S FOCUS ── */}
-      {tab === "Today's Focus" && (
-        <div className="space-y-4">
-          {blockedTasks.length > 0 && (
-            <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-3">
-              <p className="text-xs font-bold text-rose-400 mb-2 flex items-center gap-2">
-                <AlertTriangle size={13} /> {blockedTasks.length} Blocked Task{blockedTasks.length > 1 ? "s" : ""}
-              </p>
-              {blockedTasks.map(t => (
-                <p key={t.id} className="text-xs text-rose-300/70 ml-5">• {t.title}</p>
-              ))}
+      {/* ── ALL TASKS ── */}
+      {tab === "All Tasks" && (
+        <div className="space-y-3">
+          <p className="text-xs text-zinc-500">{myTasks.length} tasks assigned to you</p>
+          {myTasks.map(task => (
+            <div key={task.id} className="bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-4 flex items-center gap-4">
+              <div className={cn("w-2 h-2 rounded-full flex-shrink-0", PRIORITY_DOT[task.priority] || "bg-zinc-600")} />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-white truncate">{task.title}</p>
+                <p className="text-xs text-zinc-500">{task.project?.name} · {task.priority}</p>
+              </div>
+              {task.dueDate && (
+                <p className="text-[10px] text-amber-500 flex-shrink-0">
+                  Due {new Date(task.dueDate).toLocaleDateString()}
+                </p>
+              )}
+              <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold border flex-shrink-0", STATUS_COLORS[task.status])}>
+                {task.status?.replace(/_/g, " ")}
+              </span>
             </div>
-          )}
-
-          {inProgressTasks.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs font-bold text-blue-400 uppercase tracking-widest flex items-center gap-2">
-                <Play size={12} /> Currently Working On
-              </p>
-              {inProgressTasks.map(task => (
-                <TaskCard key={task.id} task={task} onStatusChange={updateStatus} updating={updatingId === task.id} />
-              ))}
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
-              <Target size={12} /> Up Next (High Priority)
-            </p>
-            {todayFocus.filter(t => t.status !== "IN_PROGRESS").slice(0, 5).length === 0 ? (
-              <p className="text-xs text-zinc-600 ml-4">All high-priority tasks are in progress</p>
-            ) : todayFocus.filter(t => t.status !== "IN_PROGRESS").slice(0, 5).map(task => (
-              <TaskCard key={task.id} task={task} onStatusChange={updateStatus} updating={updatingId === task.id} />
-            ))}
-          </div>
+          ))}
         </div>
       )}
 
       {/* ── LOG TIME ── */}
       {tab === "Log Time" && (
         <div className="space-y-5">
-          {/* Log form */}
           <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-2xl p-5 space-y-4">
-            <p className="text-sm font-bold text-white">Log Time Entry</p>
+            <p className="text-sm font-bold text-white">Log Work Time</p>
 
             <div>
               <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Task</label>
               <select
                 value={timeForm.taskId}
-                onChange={e => setTimeForm(prev => ({ ...prev, taskId: e.target.value }))}
+                onChange={e => setTimeForm(p => ({ ...p, taskId: e.target.value }))}
                 className="w-full mt-1.5 bg-zinc-800/60 border border-zinc-700/60 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-zinc-500"
               >
-                <option value="">Select a task...</option>
-                {tasks.filter(t => t.status !== "DONE").map(t => (
+                <option value="">Select task...</option>
+                {myTasks.filter(t => t.status !== "DONE").map(t => (
                   <option key={t.id} value={t.id}>{t.title}</option>
                 ))}
               </select>
@@ -252,22 +302,20 @@ export default function DeveloperPage() {
               <div>
                 <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Hours</label>
                 <input
-                  type="number"
-                  step="0.25"
-                  min="0.25"
+                  type="number" step="0.25" min="0.25"
                   value={timeForm.hours}
-                  onChange={e => setTimeForm(prev => ({ ...prev, hours: e.target.value }))}
-                  placeholder="e.g. 2.5"
+                  onChange={e => setTimeForm(p => ({ ...p, hours: e.target.value }))}
+                  placeholder="2.5"
                   className="w-full mt-1.5 bg-zinc-800/60 border border-zinc-700/60 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-zinc-500"
                 />
               </div>
               <div>
-                <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Description</label>
+                <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Note</label>
                 <input
                   type="text"
                   value={timeForm.description}
-                  onChange={e => setTimeForm(prev => ({ ...prev, description: e.target.value }))}
-                  placeholder="What did you work on?"
+                  onChange={e => setTimeForm(p => ({ ...p, description: e.target.value }))}
+                  placeholder="What did you build?"
                   className="w-full mt-1.5 bg-zinc-800/60 border border-zinc-700/60 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-zinc-500"
                 />
               </div>
@@ -283,180 +331,233 @@ export default function DeveloperPage() {
             </button>
           </div>
 
-          {/* Time history */}
+          {/* History */}
           <div>
             <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">
-              My Time Log · <span className="text-white">{totalHours.toFixed(1)}h total</span>
+              Time History · <span className="text-white">{totalHours.toFixed(1)}h total</span>
             </p>
             {myTime.length === 0 ? (
               <p className="text-xs text-zinc-600">No time logged yet</p>
-            ) : (
-              <div className="space-y-2">
-                {myTime.map((e: any) => (
-                  <div key={e.id} className="bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-3 flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-blue-500/20 flex items-center justify-center flex-shrink-0">
-                      <Clock size={13} className="text-blue-400" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-white truncate">{e.task?.title || "Task"}</p>
-                      {e.description && <p className="text-xs text-zinc-500">{e.description}</p>}
-                    </div>
-                    <p className="text-sm font-black text-blue-400 flex-shrink-0">{e.hours}h</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ── MY STATS ── */}
-      {tab === "My Stats" && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            {[
-              { label: "Total Tasks",   value: tasks.length,           sub: "assigned to me",   color: "text-white",        icon: Code2 },
-              { label: "Completed",     value: doneCount,              sub: "tasks done",        color: "text-emerald-400",  icon: CheckCircle2 },
-              { label: "Hours Logged",  value: totalHours.toFixed(1),  sub: "total time logged", color: "text-blue-400",     icon: Clock },
-              { label: "Completion",    value: tasks.length ? `${Math.round((doneCount / tasks.length) * 100)}%` : "0%", sub: "task rate", color: "text-violet-400", icon: Target },
-            ].map(s => {
-              const Icon = s.icon;
-              return (
-                <div key={s.label} className="bg-zinc-900/60 border border-zinc-800/60 rounded-2xl p-5">
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="text-xs text-zinc-500 uppercase tracking-widest font-bold">{s.label}</p>
-                    <Icon size={16} className={cn("opacity-50", s.color)} />
-                  </div>
-                  <p className={cn("text-3xl font-black", s.color)}>{s.value}</p>
-                  <p className="text-[10px] text-zinc-600 mt-1">{s.sub}</p>
+            ) : myTime.map((e: any) => (
+              <div key={e.id} className="bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-3 flex items-center gap-3 mb-2">
+                <div className="w-8 h-8 rounded-xl bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                  <Clock size={13} className="text-blue-400" />
                 </div>
-              );
-            })}
-          </div>
-
-          {/* Status breakdown */}
-          <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-2xl p-5">
-            <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-4">Status Breakdown</p>
-            <div className="space-y-3">
-              {STATUS_ORDER.map(status => {
-                const count = tasks.filter(t => t.status === status).length;
-                const pct = tasks.length > 0 ? (count / tasks.length) * 100 : 0;
-                const cfg = STATUS_CONFIG[status];
-                return (
-                  <div key={status}>
-                    <div className="flex items-center justify-between mb-1">
-                      <p className={cn("text-xs font-semibold", cfg.color)}>{cfg.label}</p>
-                      <p className="text-xs text-zinc-500">{count} tasks</p>
-                    </div>
-                    <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${pct}%` }}
-                        transition={{ duration: 0.6 }}
-                        className={cn("h-full rounded-full", {
-                          "bg-zinc-500": status === "TODO",
-                          "bg-blue-500": status === "IN_PROGRESS",
-                          "bg-violet-500": status === "REVIEW",
-                          "bg-emerald-500": status === "DONE",
-                          "bg-rose-500": status === "BLOCKED",
-                        })}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-white truncate">{e.task?.title || "Task"}</p>
+                  {e.description && <p className="text-xs text-zinc-500">{e.description}</p>}
+                </div>
+                <p className="text-sm font-black text-blue-400">{e.hours}h</p>
+              </div>
+            ))}
           </div>
         </div>
       )}
+
+      {/* ── LEADERBOARD ── */}
+      {tab === "Leaderboard" && (
+        <div className="space-y-3">
+          <p className="text-xs text-zinc-500 uppercase tracking-widest font-bold">Dev Team Performance</p>
+          {leaderboard.length === 0 ? (
+            <div className="text-center py-16 text-zinc-600">
+              <Award size={32} className="mx-auto mb-3 opacity-30" />
+              <p className="text-sm">No tasks yet</p>
+            </div>
+          ) : leaderboard.map((dev, i) => (
+            <div key={dev.name} className="bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-4 flex items-center gap-4">
+              <div className={cn(
+                "w-8 h-8 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0",
+                i === 0 ? "bg-amber-400 text-black" :
+                i === 1 ? "bg-zinc-400 text-black" :
+                i === 2 ? "bg-amber-700 text-white" :
+                "bg-zinc-800 text-zinc-400"
+              )}>
+                {i + 1}
+              </div>
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-xs font-black text-white flex-shrink-0">
+                {dev.name.split(" ").map(n => n[0]).join("").slice(0, 2)}
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-white">{dev.name}</p>
+                <p className="text-xs text-zinc-500">{dev.tasks} tasks · {dev.inProgress} in progress</p>
+              </div>
+              <div className="text-right">
+                <p className="text-lg font-black text-emerald-400">{dev.done}</p>
+                <p className="text-[10px] text-zinc-600">done</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── STATUS UPDATE MODAL ── */}
+      <AnimatePresence>
+        {updateModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={e => e.target === e.currentTarget && setUpdateModal(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-md shadow-2xl"
+            >
+              <p className="text-base font-bold text-white mb-1">{updateModal.task?.title}</p>
+              <p className="text-xs text-zinc-500 mb-5">
+                {updateModal.action === "DONE" && "Confirm this task is fully complete"}
+                {updateModal.action === "REVIEW" && "Send this task for code/QA review"}
+                {updateModal.action === "BLOCKED" && "Describe what is blocking you"}
+              </p>
+
+              <div className="mb-5">
+                <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest">
+                  {updateModal.action === "BLOCKED" ? "Blocker Description *" : "Notes (optional)"}
+                </label>
+                <textarea
+                  value={updateNote}
+                  onChange={e => setUpdateNote(e.target.value)}
+                  placeholder={
+                    updateModal.action === "BLOCKED" ? "What is blocking you?" :
+                    updateModal.action === "DONE" ? "What was delivered?" :
+                    "Any notes for the reviewer?"
+                  }
+                  rows={3}
+                  className="w-full mt-1.5 bg-zinc-800/60 border border-zinc-700/60 rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-600 outline-none focus:border-zinc-500 resize-none"
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setUpdateModal(null)}
+                  className="flex-1 py-2.5 rounded-xl text-xs font-bold text-zinc-500 hover:text-zinc-300 border border-zinc-800 hover:border-zinc-700 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => updateStatus(updateModal.task.id, updateModal.action, updateNote)}
+                  disabled={updatingId === updateModal.task.id || (updateModal.action === "BLOCKED" && !updateNote.trim())}
+                  className={cn(
+                    "flex-1 py-2.5 rounded-xl text-xs font-bold text-white transition-all disabled:opacity-50",
+                    updateModal.action === "BLOCKED" ? "bg-rose-600 hover:bg-rose-500" :
+                    updateModal.action === "DONE" ? "bg-emerald-600 hover:bg-emerald-500" :
+                    "bg-violet-600 hover:bg-violet-500"
+                  )}
+                >
+                  {updatingId === updateModal.task.id
+                    ? "Updating..."
+                    : updateModal.action === "DONE" ? "Complete Task"
+                    : updateModal.action === "REVIEW" ? "Send for Review"
+                    : "Report Blocker"
+                  }
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
 // ─── TASK CARD ──────────────────────────────────────────────────
 
-function TaskCard({ task, onStatusChange, updating }: {
+function DevTaskCard({ task, onAction, updating }: {
   task: any;
-  onStatusChange: (id: string, status: string) => void;
+  onAction: (task: any, action: string) => void;
   updating: boolean;
 }) {
-  const cfg = STATUS_CONFIG[task.status] || STATUS_CONFIG.TODO;
-  const pCfg = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.MEDIUM;
-  const Icon = cfg.icon;
-
-  const nextStatus: Record<string, string> = {
-    TODO: "IN_PROGRESS",
-    IN_PROGRESS: "REVIEW",
-    REVIEW: "DONE",
-    DONE: "DONE",
-    BLOCKED: "IN_PROGRESS",
-  };
-
-  const nextLabel: Record<string, string> = {
-    TODO: "Start",
-    IN_PROGRESS: "Send to Review",
-    REVIEW: "Mark Done",
-    DONE: "Done",
-    BLOCKED: "Unblock",
-  };
+  const isBlocked = task.status === "BLOCKED";
+  const isDone    = task.status === "DONE";
 
   return (
-    <div className={cn(
-      "bg-zinc-900/60 border rounded-xl p-4 transition-all",
-      task.status === "BLOCKED" ? "border-rose-500/30" :
-      task.status === "DONE" ? "border-zinc-800/30 opacity-60" :
-      "border-zinc-800/60 hover:border-zinc-700/60"
-    )}>
+    <motion.div
+      layout
+      className={cn(
+        "bg-zinc-900/60 border rounded-xl p-4 transition-all",
+        isBlocked ? "border-rose-500/40 bg-rose-500/5" :
+        isDone    ? "border-zinc-800/30 opacity-55" :
+        task.status === "IN_PROGRESS" ? "border-blue-500/30 bg-blue-500/5" :
+        task.status === "REVIEW" ? "border-violet-500/30 bg-violet-500/5" :
+        "border-zinc-800/60 hover:border-zinc-700/60"
+      )}
+    >
       <div className="flex items-start gap-3">
-        <Icon size={15} className={cn("mt-0.5 flex-shrink-0", cfg.color)} />
+        {/* Priority dot */}
+        <div className={cn("w-2 h-2 rounded-full mt-2 flex-shrink-0", PRIORITY_DOT[task.priority] || "bg-zinc-600")} />
+
+        {/* Content */}
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-white leading-snug">{task.title}</p>
-          {task.description && (
-            <p className="text-xs text-zinc-500 mt-0.5 line-clamp-2">{task.description}</p>
-          )}
-          <div className="flex items-center gap-2 mt-2 flex-wrap">
-            <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold border", pCfg.color)}>
-              {pCfg.label}
+          <div className="flex items-start gap-2 flex-wrap">
+            <p className="text-sm font-semibold text-white leading-snug">{task.title}</p>
+            <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold border flex-shrink-0", STATUS_COLORS[task.status])}>
+              {task.status?.replace(/_/g, " ")}
             </span>
+          </div>
+
+          {task.description && (
+            <p className="text-xs text-zinc-500 mt-1 line-clamp-2">{task.description}</p>
+          )}
+
+          <div className="flex items-center gap-3 mt-2 flex-wrap">
             {task.project?.name && (
               <span className="text-[10px] text-zinc-600">{task.project.name}</span>
             )}
+            {task.priority && (
+              <span className="text-[10px] text-zinc-600 font-semibold">{task.priority}</span>
+            )}
             {task.dueDate && (
-              <span className="text-[10px] text-amber-500">Due {new Date(task.dueDate).toLocaleDateString()}</span>
+              <span className="text-[10px] text-amber-500">
+                Due {new Date(task.dueDate).toLocaleDateString()}
+              </span>
             )}
           </div>
         </div>
 
-        {/* Next action button */}
-        {task.status !== "DONE" && (
-          <button
-            onClick={() => onStatusChange(task.id, nextStatus[task.status])}
-            disabled={updating}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold transition-all flex-shrink-0 disabled:opacity-50",
-              task.status === "BLOCKED"
-                ? "bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/30"
-                : "bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700"
-            )}
-          >
-            {updating ? <Loader2 size={10} className="animate-spin" /> : <ArrowRight size={10} />}
-            {nextLabel[task.status]}
-          </button>
-        )}
+        {isDone && <CheckCircle2 size={18} className="text-emerald-400 flex-shrink-0" />}
       </div>
 
-      {/* Mark blocked button */}
-      {["TODO", "IN_PROGRESS"].includes(task.status) && (
-        <div className="mt-2 flex justify-end">
-          <button
-            onClick={() => onStatusChange(task.id, "BLOCKED")}
-            disabled={updating}
-            className="text-[10px] text-zinc-700 hover:text-rose-400 transition-colors"
-          >
-            Mark Blocked
-          </button>
+      {/* Action buttons */}
+      {!isDone && (
+        <div className="flex gap-1.5 mt-3 flex-wrap">
+          {ACTIONS.filter(a => {
+            if (isBlocked) return a.key === "IN_PROGRESS";
+            if (task.status === "IN_PROGRESS") return ["REVIEW", "DONE", "BLOCKED"].includes(a.key);
+            if (task.status === "REVIEW") return ["DONE", "BLOCKED"].includes(a.key);
+            return a.key !== "REVIEW" && a.key !== "DONE" || task.status !== "TODO";
+          }).map(action => {
+            const Icon = action.icon;
+            return (
+              <button
+                key={action.key}
+                onClick={() => onAction(task, action.key)}
+                disabled={updating}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold transition-all disabled:opacity-50",
+                  action.color, action.text
+                )}
+              >
+                {updating ? <Loader2 size={10} className="animate-spin" /> : <Icon size={10} />}
+                {isBlocked && action.key === "IN_PROGRESS" ? "Unblock" : action.label}
+              </button>
+            );
+          })}
+
+          {/* TODO tasks: just show Start */}
+          {task.status === "TODO" && (
+            <button
+              onClick={() => onAction(task, "IN_PROGRESS")}
+              disabled={updating}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold transition-all disabled:opacity-50"
+            >
+              <Play size={10} /> Start
+            </button>
+          )}
         </div>
       )}
-    </div>
+    </motion.div>
   );
 }
