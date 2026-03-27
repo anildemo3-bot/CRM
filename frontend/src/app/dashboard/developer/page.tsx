@@ -62,7 +62,9 @@ export default function DeveloperPage() {
   const [csvImporting, setCsvImporting] = useState(false);
   const [csvResult, setCsvResult] = useState<{ imported: number; failed: number } | null>(null);
   const [members, setMembers] = useState<any[]>([]);
-  const [membersLoading, setMembersLoading] = useState(false);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [csvProjectId, setCsvProjectId] = useState("");
+  const [csvLoading, setCsvLoading] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -88,11 +90,14 @@ export default function DeveloperPage() {
 
   useEffect(() => {
     if (tab === "Import CSV" && members.length === 0) {
-      setMembersLoading(true);
-      projectsApi.members()
-        .then(res => setMembers(res.data || []))
-        .catch(() => toast("Failed to load developers", "error"))
-        .finally(() => setMembersLoading(false));
+      setCsvLoading(true);
+      Promise.all([projectsApi.members(), projectsApi.list()])
+        .then(([memRes, projRes]) => {
+          setMembers(memRes.data || []);
+          setProjects(projRes.data || []);
+        })
+        .catch(() => toast("Failed to load developers/projects", "error"))
+        .finally(() => setCsvLoading(false));
     }
   }, [tab]);
 
@@ -135,47 +140,50 @@ export default function DeveloperPage() {
   };
 
   const handleCsvFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!csvProjectId) { toast("Please select a project first", "error"); e.target.value = ""; return; }
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
       const text = ev.target?.result as string;
       const lines = text.trim().split("\n").filter(Boolean);
-      if (lines.length < 2) { toast("CSV must have a header row + data rows", "error"); return; }
+      if (lines.length < 2) { toast("CSV must have a header row and at least one data row", "error"); return; }
       const headers = lines[0].split(",").map(h => h.trim().replace(/"/g, ""));
       const parsed = lines.slice(1).map(line => {
         const vals = line.split(",").map(v => v.trim().replace(/"/g, ""));
         return Object.fromEntries(headers.map((h, i) => [h, vals[i] || ""]));
-      }).filter((r: any) => r.title);
+      }).filter((r: any) => r.title?.trim());
 
-      // Round-robin assign to available developers
-      const devs = members.length > 0 ? members : [];
+      if (parsed.length === 0) { toast("No valid rows found — make sure the 'title' column has values", "error"); return; }
+
+      // Round-robin assign across all developers
       const rows = parsed.map((r: any, i: number) => ({
         ...r,
-        _assignee: devs.length > 0 ? devs[i % devs.length] : null,
+        _assignee: members.length > 0 ? members[i % members.length] : null,
       }));
-
       setCsvRows(rows);
       setCsvResult(null);
+      toast(`${rows.length} task${rows.length > 1 ? "s" : ""} ready — check the preview below`, "success");
     };
     reader.readAsText(file);
     e.target.value = "";
   };
 
   const importCsvTasks = async () => {
-    if (!csvRows.length) return;
+    if (!csvRows.length || !csvProjectId) return;
     setCsvImporting(true);
     let imported = 0, failed = 0;
     for (const row of csvRows) {
       try {
         await tasksApi.create({
-          title: row.title,
-          description: row.description || "",
-          priority: ["URGENT","HIGH","MEDIUM","LOW"].includes((row.priority || "").toUpperCase())
-            ? row.priority.toUpperCase() : "MEDIUM",
-          dueDate: row.dueDate || null,
+          title: row.title.trim(),
+          description: row.description?.trim() || "",
+          priority: ["URGENT", "HIGH", "MEDIUM", "LOW"].includes((row.priority || "").toUpperCase().trim())
+            ? row.priority.toUpperCase().trim() : "MEDIUM",
+          dueDate: row.dueDate?.trim() || null,
           status: "TODO",
-          assigneeId: row._assignee?.id || undefined,
+          projectId: csvProjectId,
+          assigneeId: row._assignee?.id || null,
         });
         imported++;
       } catch { failed++; }
@@ -183,8 +191,11 @@ export default function DeveloperPage() {
     setCsvResult({ imported, failed });
     setCsvRows([]);
     setCsvImporting(false);
-    if (imported > 0) { toast(`Imported ${imported} task${imported > 1 ? "s" : ""} — assigned to ${members.length} developer${members.length !== 1 ? "s" : ""}`, "success"); load(); }
-    if (failed > 0) toast(`${failed} row${failed > 1 ? "s" : ""} failed`, "error");
+    if (imported > 0) {
+      toast(`${imported} task${imported > 1 ? "s" : ""} imported & distributed across ${members.length} developer${members.length !== 1 ? "s" : ""}`, "success");
+      load();
+    }
+    if (failed > 0) toast(`${failed} row${failed > 1 ? "s" : ""} failed to import`, "error");
   };
 
   const downloadTemplate = () => {
@@ -473,126 +484,178 @@ export default function DeveloperPage() {
       {/* ── IMPORT CSV ── */}
       {tab === "Import CSV" && (
         <div className="space-y-5">
-          {/* Template download */}
-          <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-2xl p-5">
-            <div className="flex items-start justify-between gap-4 flex-wrap">
-              <div>
-                <p className="text-sm font-bold text-white">Bulk Import Tasks</p>
-                <p className="text-xs text-zinc-500 mt-0.5">
-                  Tasks are auto-assigned round-robin to all {membersLoading ? "..." : members.length} available developer{members.length !== 1 ? "s" : ""}
-                </p>
-              </div>
-              <button
-                onClick={downloadTemplate}
-                className="flex items-center gap-2 px-3 py-2 rounded-xl border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-white text-xs font-semibold transition-all"
-              >
-                <Download size={12} /> Download Template
-              </button>
+
+          {csvLoading ? (
+            <div className="flex items-center gap-3 text-zinc-500 py-8 justify-center">
+              <Loader2 size={16} className="animate-spin" />
+              <span className="text-sm">Loading projects & developers...</span>
             </div>
-
-            {/* Developer avatars */}
-            {members.length > 0 && (
-              <div className="mt-4 flex items-center gap-2 flex-wrap">
-                <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Assigning to:</span>
-                {members.map((m, i) => (
-                  <div key={m.id} className="flex items-center gap-1.5 bg-zinc-800/60 rounded-full px-2.5 py-1">
-                    <div className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-[9px] font-black text-white flex-shrink-0">
-                      {m.name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
-                    </div>
-                    <span className="text-[10px] text-zinc-300 font-semibold">{m.name.split(" ")[0]}</span>
+          ) : (
+            <>
+              {/* Step 1 — pick project */}
+              <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-2xl p-5 space-y-4">
+                <div className="flex items-start justify-between gap-4 flex-wrap">
+                  <div>
+                    <p className="text-sm font-bold text-white">Bulk Import Tasks</p>
+                    <p className="text-xs text-zinc-500 mt-0.5">
+                      Tasks are auto-assigned round-robin across {members.length} developer{members.length !== 1 ? "s" : ""}
+                    </p>
                   </div>
-                ))}
-              </div>
-            )}
-
-            {/* CSV columns info */}
-            <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {[
-                { col: "title", req: true, note: "Task name" },
-                { col: "description", req: false, note: "Details" },
-                { col: "priority", req: false, note: "URGENT/HIGH/MEDIUM/LOW" },
-                { col: "dueDate", req: false, note: "YYYY-MM-DD" },
-              ].map(c => (
-                <div key={c.col} className="bg-zinc-800/50 rounded-xl p-3">
-                  <p className="text-xs font-bold text-white font-mono">{c.col}</p>
-                  <p className="text-[10px] text-zinc-500 mt-0.5">{c.note}</p>
-                  {c.req && <span className="text-[10px] text-rose-400 font-bold">required</span>}
+                  <button
+                    onClick={downloadTemplate}
+                    className="flex items-center gap-2 px-3 py-2 rounded-xl border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-white text-xs font-semibold transition-all"
+                  >
+                    <Download size={12} /> Template
+                  </button>
                 </div>
-              ))}
-            </div>
-          </div>
 
-          {/* Upload area */}
-          <div
-            onClick={() => csvRef.current?.click()}
-            className="border-2 border-dashed border-zinc-700 hover:border-zinc-500 rounded-2xl p-10 text-center cursor-pointer transition-all group"
-          >
-            <Upload size={28} className="mx-auto text-zinc-600 group-hover:text-zinc-400 mb-3 transition-colors" />
-            <p className="text-sm font-semibold text-zinc-400 group-hover:text-white transition-colors">
-              Click to upload CSV file
-            </p>
-            <p className="text-xs text-zinc-600 mt-1">.csv files only</p>
-            <input ref={csvRef} type="file" accept=".csv" onChange={handleCsvFile} className="hidden" />
-          </div>
+                {/* Project selector */}
+                <div>
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest">
+                    Step 1 — Select Project <span className="text-rose-400">*</span>
+                  </label>
+                  <select
+                    value={csvProjectId}
+                    onChange={e => { setCsvProjectId(e.target.value); setCsvRows([]); setCsvResult(null); }}
+                    className="w-full mt-1.5 bg-zinc-800/60 border border-zinc-700/60 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-zinc-500"
+                  >
+                    <option value="">Choose a project...</option>
+                    {projects.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
 
-          {/* Preview */}
-          {csvRows.length > 0 && (
-            <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-2xl p-5 space-y-4">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-bold text-white">
-                  Preview · <span className="text-zinc-400">{csvRows.length} row{csvRows.length > 1 ? "s" : ""}</span>
-                </p>
-                <button onClick={() => setCsvRows([])} className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors">
-                  Clear
-                </button>
+                {/* Developer avatars */}
+                {members.length > 0 && (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Distributing to:</span>
+                    {members.map(m => (
+                      <div key={m.id} className="flex items-center gap-1.5 bg-zinc-800/60 rounded-full px-2.5 py-1">
+                        <div className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-[9px] font-black text-white flex-shrink-0">
+                          {m.name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
+                        </div>
+                        <span className="text-[10px] text-zinc-300 font-semibold">{m.name.split(" ")[0]}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* CSV columns */}
+                <div>
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest">CSV Columns</label>
+                  <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {[
+                      { col: "title", req: true, note: "Task name" },
+                      { col: "description", req: false, note: "Details" },
+                      { col: "priority", req: false, note: "HIGH / MEDIUM / LOW" },
+                      { col: "dueDate", req: false, note: "YYYY-MM-DD" },
+                    ].map(c => (
+                      <div key={c.col} className="bg-zinc-800/50 rounded-xl p-3">
+                        <p className="text-xs font-bold text-white font-mono">{c.col}</p>
+                        <p className="text-[10px] text-zinc-500 mt-0.5">{c.note}</p>
+                        {c.req && <span className="text-[10px] text-rose-400 font-bold">required</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
 
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {csvRows.map((row, i) => (
-                  <div key={i} className="bg-zinc-800/50 rounded-xl p-3 flex items-center gap-3">
-                    <FileText size={13} className="text-zinc-500 flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-white truncate">{row.title}</p>
-                      {row.description && <p className="text-xs text-zinc-500 truncate">{row.description}</p>}
-                    </div>
-                    {row.priority && (
-                      <span className="text-[10px] font-bold text-zinc-400 flex-shrink-0">{row.priority.toUpperCase()}</span>
-                    )}
-                    {row.dueDate && (
-                      <span className="text-[10px] text-amber-500 flex-shrink-0">{row.dueDate}</span>
-                    )}
-                    {row._assignee && (
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        <div className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-[9px] font-black text-white">
-                          {row._assignee.name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
+              {/* Step 2 — upload */}
+              <div>
+                <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">
+                  Step 2 — Upload CSV {!csvProjectId && <span className="text-zinc-600 normal-case font-normal">(select a project first)</span>}
+                </p>
+                <div
+                  onClick={() => csvProjectId && csvRef.current?.click()}
+                  className={cn(
+                    "border-2 border-dashed rounded-2xl p-10 text-center transition-all group",
+                    csvProjectId
+                      ? "border-zinc-700 hover:border-blue-500 cursor-pointer"
+                      : "border-zinc-800 opacity-40 cursor-not-allowed"
+                  )}
+                >
+                  <Upload size={28} className="mx-auto text-zinc-600 group-hover:text-blue-400 mb-3 transition-colors" />
+                  <p className="text-sm font-semibold text-zinc-400 group-hover:text-white transition-colors">
+                    Click to upload .csv file
+                  </p>
+                  <p className="text-xs text-zinc-600 mt-1">First row must be the header row</p>
+                  <input ref={csvRef} type="file" accept=".csv" onChange={handleCsvFile} className="hidden" />
+                </div>
+              </div>
+
+              {/* Step 3 — preview & import */}
+              {csvRows.length > 0 && (
+                <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-2xl p-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-bold text-white">
+                      Step 3 — Preview &amp; Import
+                      <span className="text-zinc-400 font-normal ml-2">{csvRows.length} task{csvRows.length > 1 ? "s" : ""} ready</span>
+                    </p>
+                    <button onClick={() => setCsvRows([])} className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors">
+                      Clear
+                    </button>
+                  </div>
+
+                  <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                    {csvRows.map((row, i) => (
+                      <div key={i} className="bg-zinc-800/50 rounded-xl p-3 flex items-center gap-3">
+                        <span className="text-[10px] text-zinc-600 w-4 flex-shrink-0 font-mono">{i + 1}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-white truncate">{row.title}</p>
+                          {row.description && <p className="text-xs text-zinc-500 truncate">{row.description}</p>}
                         </div>
-                        <span className="text-[10px] text-zinc-400">{row._assignee.name.split(" ")[0]}</span>
+                        {row.priority && (
+                          <span className="text-[10px] font-bold text-zinc-500 flex-shrink-0">{row.priority.toUpperCase()}</span>
+                        )}
+                        {row.dueDate && (
+                          <span className="text-[10px] text-amber-500 flex-shrink-0">{row.dueDate}</span>
+                        )}
+                        {row._assignee ? (
+                          <div className="flex items-center gap-1.5 flex-shrink-0 bg-blue-500/10 rounded-full px-2 py-0.5">
+                            <div className="w-4 h-4 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-[8px] font-black text-white">
+                              {row._assignee.name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
+                            </div>
+                            <span className="text-[10px] text-blue-300 font-semibold">{row._assignee.name.split(" ")[0]}</span>
+                          </div>
+                        ) : (
+                          <span className="text-[10px] text-zinc-600 flex-shrink-0">unassigned</span>
+                        )}
                       </div>
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={importCsvTasks}
+                    disabled={csvImporting}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all disabled:opacity-50"
+                  >
+                    {csvImporting ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+                    {csvImporting ? "Importing..." : `Import & Distribute ${csvRows.length} Task${csvRows.length > 1 ? "s" : ""}`}
+                  </button>
+                </div>
+              )}
+
+              {/* Result banner */}
+              {csvResult && (
+                <div className={cn(
+                  "rounded-2xl p-4 flex items-center gap-3",
+                  csvResult.failed === 0
+                    ? "bg-emerald-500/10 border border-emerald-500/20"
+                    : "bg-amber-500/10 border border-amber-500/20"
+                )}>
+                  <CheckCircle2 size={16} className={csvResult.failed === 0 ? "text-emerald-400" : "text-amber-400"} />
+                  <div>
+                    <p className="text-sm font-bold text-white">
+                      {csvResult.imported} task{csvResult.imported !== 1 ? "s" : ""} imported & distributed
+                    </p>
+                    {csvResult.failed > 0 && (
+                      <p className="text-xs text-amber-400">{csvResult.failed} row{csvResult.failed > 1 ? "s" : ""} failed</p>
                     )}
                   </div>
-                ))}
-              </div>
-
-              <button
-                onClick={importCsvTasks}
-                disabled={csvImporting}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all disabled:opacity-50"
-              >
-                {csvImporting ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
-                {csvImporting ? "Importing..." : `Import ${csvRows.length} Task${csvRows.length > 1 ? "s" : ""}`}
-              </button>
-            </div>
-          )}
-
-          {/* Result */}
-          {csvResult && (
-            <div className={`rounded-2xl p-4 flex items-center gap-3 ${csvResult.failed === 0 ? "bg-emerald-500/10 border border-emerald-500/20" : "bg-amber-500/10 border border-amber-500/20"}`}>
-              <CheckCircle2 size={16} className={csvResult.failed === 0 ? "text-emerald-400" : "text-amber-400"} />
-              <p className="text-sm font-semibold text-white">
-                {csvResult.imported} imported
-                {csvResult.failed > 0 && `, ${csvResult.failed} failed`}
-              </p>
-            </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
