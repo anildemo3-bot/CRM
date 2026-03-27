@@ -34,6 +34,7 @@ const navGroups = [
     dot: "bg-emerald-400",
     items: [
       { name: "Sales CRM", icon: Users, href: "/dashboard/crm" },
+      { name: "Cold Callers", icon: Phone, href: "/dashboard/cold-callers" },
       { name: "Cold Outreach", icon: PhoneCall, href: "/dashboard/outreach" },
       { name: "Marketing", icon: Megaphone, href: "/dashboard/marketing" },
       { name: "Finance", icon: CreditCard, href: "/dashboard/finance" },
