@@ -59,6 +59,7 @@ export default function DeveloperPage() {
   // CSV import
   const csvRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
+  const [distributing, setDistributing] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -140,7 +141,8 @@ export default function DeveloperPage() {
         });
         const res = await tasksApi.importTasks(rows);
         toast(`Imported ${res.data.imported} tasks — distributed to ${res.data.distributed} developers`, "success");
-        load();
+        await load();
+        setTab("All Tasks");
       } catch (err) {
         toast("Import failed", "error");
         console.error("Import error:", err);
@@ -149,6 +151,19 @@ export default function DeveloperPage() {
     };
     reader.readAsText(file);
     e.target.value = "";
+  };
+
+  const distributeTasks = async () => {
+    setDistributing(true);
+    try {
+      const res = await tasksApi.distribute();
+      toast(`${res.data.reassigned} tasks redistributed across developers!`, "success");
+      await load();
+      setTab("All Tasks");
+    } catch {
+      toast("Distribution failed", "error");
+    }
+    setDistributing(false);
   };
 
   const downloadTemplate = () => {
@@ -301,8 +316,13 @@ export default function DeveloperPage() {
       {/* ── ALL TASKS ── */}
       {tab === "All Tasks" && (
         <div className="space-y-3">
-          <p className="text-xs text-zinc-500">{myTasks.length} tasks assigned to you</p>
-          {myTasks.map(task => (
+          <p className="text-xs text-zinc-500">{allTasks.length} total tasks across the team</p>
+          {allTasks.length === 0 ? (
+            <div className="text-center py-16 text-zinc-600">
+              <Code2 size={32} className="mx-auto mb-3 opacity-30" />
+              <p className="text-sm">No tasks yet — import a CSV to get started</p>
+            </div>
+          ) : allTasks.map(task => (
             <div key={task.id} className="bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-4 flex items-center gap-4">
               <div className={cn("w-2 h-2 rounded-full flex-shrink-0", PRIORITY_DOT[task.priority] || "bg-zinc-600")} />
               <div className="flex-1 min-w-0">
@@ -313,6 +333,16 @@ export default function DeveloperPage() {
                 <p className="text-[10px] text-amber-500 flex-shrink-0">
                   Due {new Date(task.dueDate).toLocaleDateString()}
                 </p>
+              )}
+              {task.assignee ? (
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-[9px] font-black text-white">
+                    {task.assignee.name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
+                  </div>
+                  <span className="text-xs text-zinc-400">{task.assignee.name.split(" ")[0]}</span>
+                </div>
+              ) : (
+                <span className="text-[10px] text-zinc-600 flex-shrink-0">Unassigned</span>
               )}
               <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold border flex-shrink-0", STATUS_COLORS[task.status])}>
                 {task.status?.replace(/_/g, " ")}
@@ -443,7 +473,7 @@ export default function DeveloperPage() {
                 <p className="text-sm font-bold text-white">Import Tasks from CSV</p>
                 <p className="text-xs text-zinc-500 mt-0.5">Tasks auto-distributed round-robin across all developers in your org</p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 <button
                   onClick={downloadTemplate}
                   className="flex items-center gap-2 px-3 py-2 rounded-xl border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-white text-xs font-semibold transition-all"
@@ -452,11 +482,19 @@ export default function DeveloperPage() {
                 </button>
                 <button
                   onClick={() => csvRef.current?.click()}
-                  disabled={importing}
+                  disabled={importing || distributing}
                   className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all disabled:opacity-50"
                 >
                   {importing ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
                   {importing ? "Importing..." : "Import CSV"}
+                </button>
+                <button
+                  onClick={distributeTasks}
+                  disabled={distributing || importing}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all disabled:opacity-50"
+                >
+                  {distributing ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
+                  {distributing ? "Distributing..." : "Distribute Tasks"}
                 </button>
                 <input ref={csvRef} type="file" accept=".csv" onChange={handleImport} className="hidden" />
               </div>

@@ -38,6 +38,7 @@ export const tasksApi = {
   list: (projectId?: string) => api.get(`/projects/tasks${projectId ? `?projectId=${projectId}` : ""}`),
   create: (data: any) => api.post("/projects/tasks", data),
   importTasks: (rows: any[]) => api.post("/projects/tasks/import", { rows }, { timeout: 60000 }),
+  distribute: () => api.post("/projects/tasks/auto-reassign", {}),
   update: (id: string, data: any) => api.patch(`/projects/tasks/${id}`, data),
   updateStatus: (id: string, data: any) => api.patch(`/projects/tasks/${id}`, data),
   delete: (id: string) => api.delete(`/projects/tasks/${id}`),
