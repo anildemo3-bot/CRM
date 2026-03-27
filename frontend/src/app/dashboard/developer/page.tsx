@@ -123,24 +123,28 @@ export default function DeveloperPage() {
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setImporting(true);
     const reader = new FileReader();
     reader.onload = async (ev) => {
-      const text = (ev.target?.result as string)
-        .replace(/^\uFEFF/, "")
-        .replace(/\r\n/g, "\n")
-        .replace(/\r/g, "\n");
-      const lines = text.trim().split("\n");
-      const headers = lines[0].split(",").map(h => h.trim().replace(/"/g, ""));
-      const rows = lines.slice(1).map(line => {
-        const vals = line.split(",").map(v => v.trim().replace(/"/g, ""));
-        return Object.fromEntries(headers.map((h, i) => [h, vals[i] || ""]));
-      });
-      setImporting(true);
       try {
+        const text = (ev.target?.result as string)
+          .replace(/^\uFEFF/, "")
+          .replace(/\r\n/g, "\n")
+          .replace(/\r/g, "\n");
+        const lines = text.trim().split("\n").filter(l => l.trim());
+        if (lines.length < 2) { toast("CSV needs a header row + at least one data row", "error"); setImporting(false); return; }
+        const headers = lines[0].split(",").map(h => h.trim().replace(/"/g, ""));
+        const rows = lines.slice(1).map(line => {
+          const vals = line.split(",").map(v => v.trim().replace(/"/g, ""));
+          return Object.fromEntries(headers.map((h, i) => [h, vals[i] || ""]));
+        });
         const res = await tasksApi.importTasks(rows);
         toast(`Imported ${res.data.imported} tasks — distributed to ${res.data.distributed} developers`, "success");
         load();
-      } catch { toast("Import failed", "error"); }
+      } catch (err) {
+        toast("Import failed", "error");
+        console.error("Import error:", err);
+      }
       setImporting(false);
     };
     reader.readAsText(file);

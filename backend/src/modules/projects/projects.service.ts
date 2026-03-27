@@ -411,39 +411,53 @@ export class ProjectsService {
   // ─── BULK IMPORT + DISTRIBUTE ─────────────────────────────────
 
   async importTasks(orgId: string, userId: string, rows: any[]) {
-    // Get members for round-robin assignment
-    const members = await this.prisma.user.findMany({
-      where: { organizationId: orgId },
+    console.log(`[importTasks] orgId=${orgId} userId=${userId} rows=${rows?.length}`);
+
+    // Get DEVELOPER-role users first; fall back to all org users
+    let members = await this.prisma.user.findMany({
+      where: { organizationId: orgId, role: 'DEVELOPER' },
       select: { id: true, name: true },
     });
+    if (members.length === 0) {
+      members = await this.prisma.user.findMany({
+        where: { organizationId: orgId },
+        select: { id: true, name: true },
+      });
+    }
+    console.log(`[importTasks] members found: ${members.length}`);
 
-    // Get or create a default project for this org
+    // Get first project for this org (create one if none exist)
     let project = await this.prisma.project.findFirst({
       where: { organizationId: orgId },
       orderBy: { createdAt: 'asc' },
     });
     if (!project) {
       project = await this.prisma.project.create({
-        data: { name: 'General', organizationId: orgId, status: 'ACTIVE' },
+        data: { name: 'General', organizationId: orgId },
       });
     }
+    console.log(`[importTasks] project=${project.id}`);
+
+    const validRows = (rows || []).filter(row => {
+      const title = (row['title'] || row['Title'] || '').trim();
+      return title.length > 0;
+    });
+    console.log(`[importTasks] validRows=${validRows.length}`);
 
     const created: any[] = [];
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
+    for (let i = 0; i < validRows.length; i++) {
+      const row = validRows[i];
       const title = (row['title'] || row['Title'] || '').trim();
-      if (!title) continue;
 
-      const priority = ['URGENT', 'HIGH', 'MEDIUM', 'LOW'].includes(
-        (row['priority'] || row['Priority'] || '').toUpperCase().trim(),
-      )
-        ? (row['priority'] || row['Priority']).toUpperCase().trim()
-        : 'MEDIUM';
+      const rawPriority = (row['priority'] || row['Priority'] || '').toUpperCase().trim();
+      const priority = ['URGENT', 'HIGH', 'MEDIUM', 'LOW'].includes(rawPriority)
+        ? rawPriority : 'MEDIUM';
 
       const rawDate = (row['duedate'] || row['dueDate'] || row['DueDate'] || '').trim();
       const dueDate = rawDate ? new Date(rawDate) : null;
 
       const assignee = members.length > 0 ? members[i % members.length] : null;
+      console.log(`[importTasks] row ${i}: title="${title}" assignee=${assignee?.name}`);
 
       const task = await this.prisma.task.create({
         data: {
@@ -463,6 +477,7 @@ export class ProjectsService {
       created.push(task);
     }
 
+    console.log(`[importTasks] done: imported=${created.length}`);
     return { imported: created.length, distributed: members.length, tasks: created };
   }
 
