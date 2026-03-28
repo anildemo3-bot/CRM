@@ -18,7 +18,7 @@ export class SuperAdminService {
   async getOrgs() {
     return this.prisma.organization.findMany({
       include: {
-        _count: { select: { users: true, deals: true, tasks: true } },
+        _count: { select: { users: true, deals: true, projects: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -29,7 +29,7 @@ export class SuperAdminService {
       where: { id: orgId },
       include: {
         users: { select: { id: true, name: true, email: true, role: true, createdAt: true } },
-        _count: { select: { users: true, deals: true, tasks: true, contacts: true } },
+        _count: { select: { users: true, deals: true, projects: true, contacts: true } },
       },
     });
   }
