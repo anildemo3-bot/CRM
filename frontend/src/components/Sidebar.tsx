@@ -7,10 +7,11 @@ import {
   LayoutDashboard, Users, FolderKanban, CreditCard,
   Settings, LogOut, BarChart3, CheckSquare, Sparkles,
   Briefcase, Phone, Megaphone, Brain, BookOpen,
-  Handshake, Cpu, TrendingUp, ChevronDown, Rocket, Zap, PhoneCall, Code2
+  Handshake, Cpu, TrendingUp, ChevronDown, Rocket, Zap, PhoneCall, Code2, Users2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+import { useAuthStore } from "@/lib/store";
 
 const navGroups = [
   {
@@ -76,6 +77,7 @@ const navGroups = [
     items: [
       { name: "Operations", icon: Briefcase, href: "/dashboard/operations" },
       { name: "Partners", icon: Handshake, href: "/dashboard/partners" },
+      { name: "Team", icon: Users2, href: "/dashboard/team", roles: ["ADMIN", "MANAGER", "SUPER_ADMIN"] },
     ],
   },
   {
@@ -95,6 +97,7 @@ const navGroups = [
 
 export default function Sidebar({ onLogout }: { onLogout?: () => void }) {
   const pathname = usePathname();
+  const { user } = useAuthStore();
   const [collapsed, setCollapsed] = useState<string[]>([]);
 
   const toggleGroup = (label: string) =>
@@ -181,7 +184,7 @@ export default function Sidebar({ onLogout }: { onLogout?: () => void }) {
                     transition={{ duration: 0.2, ease: "easeInOut" }}
                     className="overflow-hidden space-y-0.5"
                   >
-                    {group.items.map((item, ii) => {
+                    {group.items.filter(item => !(item as any).roles || (item as any).roles.includes(user?.role)).map((item, ii) => {
                       const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
                       return (
                         <motion.div
@@ -270,11 +273,11 @@ export default function Sidebar({ onLogout }: { onLogout?: () => void }) {
 
         <div className="mt-3 p-3 bg-gradient-to-r from-zinc-900/60 to-zinc-800/40 rounded-2xl border border-white/5 flex items-center gap-3">
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 via-indigo-500 to-violet-600 flex items-center justify-center text-[10px] font-black text-white shadow-lg shadow-indigo-500/30 flex-shrink-0">
-            JD
+            {user?.name ? user.name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase() : "?"}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[11px] font-bold text-white truncate">John Doe</p>
-            <p className="text-[9px] text-zinc-600 font-bold uppercase tracking-tighter">Administrator</p>
+            <p className="text-[11px] font-bold text-white truncate">{user?.name ?? "Unknown"}</p>
+            <p className="text-[9px] text-zinc-600 font-bold uppercase tracking-tighter">{user?.role ?? ""}</p>
           </div>
           <div className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]" />
         </div>

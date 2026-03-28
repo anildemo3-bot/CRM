@@ -179,3 +179,23 @@ export const partnersApi = {
   createPayout: (data: any) => api.post("/partners/payouts", data),
   approvePayout: (id: string) => api.patch(`/partners/payouts/${id}/approve`, {}),
 };
+
+export const teamApi = {
+  members: () => api.get("/team/members"),
+  invite: (data: { email: string; role: string }) => api.post("/team/invite", data),
+  invites: () => api.get("/team/invites"),
+  revokeInvite: (id: string) => api.delete(`/team/invites/${id}`),
+  changeRole: (memberId: string, role: string) => api.patch(`/team/members/${memberId}/role`, { role }),
+  removeMember: (memberId: string) => api.delete(`/team/members/${memberId}`),
+};
+
+export const superAdminApi = {
+  stats: () => api.get("/super-admin/stats"),
+  orgs: () => api.get("/super-admin/orgs"),
+  orgDetail: (id: string) => api.get(`/super-admin/orgs/${id}`),
+};
+
+export const inviteApi = {
+  validate: (token: string) => api.get(`/auth/invite/${token}`),
+  accept: (data: { token: string; name: string; password: string }) => api.post("/auth/signup-invite", data),
+};

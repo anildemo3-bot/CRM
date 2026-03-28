@@ -18,7 +18,7 @@ const ORBS = [
 
 export default function LoginPage() {
   const router = useRouter();
-  const { setUser, token } = useAuthStore();
+  const { setUser, token, user } = useAuthStore();
   const { toast } = useToast();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -27,8 +27,11 @@ export default function LoginPage() {
   const [focusedField, setFocusedField] = useState<string | null>(null);
 
   useEffect(() => {
-    if (token) router.replace("/dashboard");
-  }, [token, router]);
+    if (token) {
+      const role = user?.role;
+      router.replace(role === 'SUPER_ADMIN' ? '/super-admin' : '/dashboard');
+    }
+  }, [token, user, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,7 +40,9 @@ export default function LoginPage() {
       const res = await api.post("/auth/login", { email, password });
       setUser(res.data.user, res.data.access_token);
       toast("Welcome back! 🎉", "success");
-      router.push("/dashboard");
+      const role = res.data.user.role;
+      if (role === 'SUPER_ADMIN') router.push('/super-admin');
+      else router.push('/dashboard');
     } catch (err: any) {
       const msg = err?.response?.data?.message ?? "Invalid credentials";
       toast(msg, "error");
