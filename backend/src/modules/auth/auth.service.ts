@@ -60,6 +60,51 @@ export class AuthService {
     return this.generateTokens(user);
   }
 
+  async validateInviteToken(token: string) {
+    const invite = await this.prisma.invite.findUnique({
+      where: { token },
+      include: {
+        organization: { select: { name: true, id: true } },
+        invitedBy: { select: { name: true } },
+      },
+    });
+    if (!invite || invite.status !== 'PENDING' || invite.expiresAt < new Date()) {
+      throw new UnauthorizedException('Invalid or expired invite link');
+    }
+    return {
+      email: invite.email,
+      role: invite.role,
+      orgName: invite.organization.name,
+      orgId: invite.organization.id,
+      invitedBy: invite.invitedBy.name,
+    };
+  }
+
+  async signupViaInvite(data: { token: string; name: string; password: string }) {
+    const invite = await this.prisma.invite.findUnique({
+      where: { token: data.token },
+      include: { organization: true },
+    });
+    if (!invite || invite.status !== 'PENDING' || invite.expiresAt < new Date()) {
+      throw new UnauthorizedException('Invalid or expired invite link');
+    }
+    const existing = await this.prisma.user.findUnique({ where: { email: invite.email } });
+    if (existing) throw new UnauthorizedException('Email already registered');
+
+    const hashedPassword = await bcrypt.hash(data.password, 10);
+    const user = await this.prisma.user.create({
+      data: {
+        name: data.name,
+        email: invite.email,
+        password: hashedPassword,
+        role: invite.role,
+        organizationId: invite.organizationId,
+      },
+    });
+    await this.prisma.invite.update({ where: { token: data.token }, data: { status: 'ACCEPTED' } });
+    return this.generateTokens(user);
+  }
+
   private generateTokens(user: any) {
     const payload = { sub: user.id, email: user.email, role: user.role, orgId: user.organizationId };
     const access_token = this.jwtService.sign(payload);

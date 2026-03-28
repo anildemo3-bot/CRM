@@ -13,6 +13,8 @@ import { KnowledgeModule } from './modules/knowledge/knowledge.module';
 import { PartnersModule } from './modules/partners/partners.module';
 import { OutreachModule } from './modules/outreach/outreach.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { TeamModule } from './modules/team/team.module';
+import { SuperAdminModule } from './modules/super-admin/super-admin.module';
 
 @Module({
   imports: [
@@ -30,6 +32,8 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     KnowledgeModule,
     PartnersModule,
     OutreachModule,
+    TeamModule,
+    SuperAdminModule,
   ],
 })
 export class AppModule {}

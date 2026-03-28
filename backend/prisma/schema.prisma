@@ -13,6 +13,7 @@ datasource db {
 // --- CORE & AUTH ---
 
 enum Role {
+  SUPER_ADMIN
   ADMIN
   MANAGER
   SALES
@@ -39,6 +40,7 @@ model Organization {
   employees Employee[]
   tickets   Ticket[]
   settings  OrgSettings?
+  invites   Invite[]
 }
 
 model OrgSettings {
@@ -75,6 +77,7 @@ model User {
   notes        Note[]
   messages     Message[]
   timeEntries  TimeEntry[]
+  sentInvites  Invite[]    @relation("SentInvites")
 }
 
 // --- SALES CRM ---
@@ -486,4 +489,28 @@ model OutreachTemplate {
   channel   String   @default("EMAIL")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// --- INVITES ---
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+}
+
+model Invite {
+  id             String       @id @default(cuid())
+  email          String
+  role           Role         @default(SALES)
+  token          String       @unique @default(cuid())
+  status         InviteStatus @default(PENDING)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  invitedById    String
+  invitedBy      User         @relation("SentInvites", fields: [invitedById], references: [id])
+  expiresAt      DateTime
+  createdAt      DateTime     @default(now())
+
+  @@index([token])
 }
