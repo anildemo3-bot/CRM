@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Phone, PhoneCall, PhoneMissed, Clock, CheckCircle2, XCircle,
   Voicemail, Users, BarChart3, Loader2, Play, ChevronRight,
-  Building2, User, Mail, Target, TrendingUp, Award, Zap, RefreshCw,
+  Building2, User, Mail, Target, TrendingUp, Award, Zap, RefreshCw, Upload,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { outreachApi } from "@/lib/endpoints";
@@ -46,6 +46,8 @@ export default function ColdCallersPage() {
   const [sdrStats, setSdrStats] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [distributing, setDistributing] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   // Call modal
   const [callModal, setCallModal] = useState<any>(null);
@@ -85,6 +87,41 @@ export default function ColdCallersPage() {
       toast("Distribution failed", "error");
     }
     setDistributing(false);
+  };
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(/^\uFEFF/, "");
+      const lines = normalized.split("\n").filter(l => l.trim());
+      if (lines.length < 2) { toast("CSV is empty", "error"); setImporting(false); return; }
+      const headers = lines[0].split(",").map(h => h.trim().replace(/^"|"$/g, "").toLowerCase());
+      const rows = lines.slice(1).map(line => {
+        const vals = line.split(",").map(v => v.trim().replace(/^"|"$/g, ""));
+        const obj: Record<string, string> = {};
+        headers.forEach((h, i) => { obj[h] = vals[i] || ""; });
+        return obj;
+      }).filter(r => r["first name"] || r["firstname"] || r["first_name"] || r["name"]);
+      const mapped = rows.map(r => ({
+        firstName: r["first name"] || r["firstname"] || r["first_name"] || r["name"] || "",
+        lastName: r["last name"] || r["lastname"] || r["last_name"] || "",
+        email: r["email"] || "",
+        phone: r["phone"] || r["phone number"] || r["mobile"] || "",
+        company: r["company"] || r["company name"] || "",
+        title: r["title"] || r["job title"] || r["position"] || "",
+        channel: "PHONE",
+      }));
+      await outreachApi.importProspects(mapped);
+      toast(`${mapped.length} prospects imported!`, "success");
+      await load();
+    } catch {
+      toast("Import failed", "error");
+    }
+    setImporting(false);
+    if (fileRef.current) fileRef.current.value = "";
   };
 
   const logCall = async (outcome: string, prospectStatus: string) => {
@@ -149,6 +186,15 @@ export default function ColdCallersPage() {
         <div className="flex items-center gap-3">
           <button onClick={load} className="p-2 rounded-xl border border-zinc-800 hover:border-zinc-700 text-zinc-500 hover:text-zinc-300 transition-all">
             <RefreshCw size={14} />
+          </button>
+          <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleImport} />
+          <button
+            onClick={() => fileRef.current?.click()}
+            disabled={importing}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all disabled:opacity-50"
+          >
+            {importing ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+            Import CSV
           </button>
           <button
             onClick={distribute}
