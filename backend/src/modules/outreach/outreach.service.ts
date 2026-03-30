@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
 
+const FULL_ACCESS_ROLES = ['ADMIN', 'MANAGER', 'SUPER_ADMIN', 'SALES'];
+const COLD_CALLER_ROLES = ['COLD_CALLER', 'SALES', 'ADMIN', 'MANAGER', 'SUPER_ADMIN'];
+const OUTREACHER_ROLES  = ['OUTREACHER', 'SALES', 'ADMIN', 'MANAGER', 'SUPER_ADMIN'];
+
 @Injectable()
 export class OutreachService {
   constructor(private prisma: PrismaService) {}
@@ -9,7 +13,7 @@ export class OutreachService {
 
   async getProspects(orgId: string, userId: string, role: string) {
     const where: any = { organizationId: orgId };
-    if (role !== 'ADMIN' && role !== 'MANAGER') {
+    if (!FULL_ACCESS_ROLES.includes(role)) {
       where.assignedTo = userId;
     }
     return this.prisma.prospect.findMany({
@@ -97,9 +101,9 @@ export class OutreachService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Get all SALES/ADMIN/MANAGER users in the org
+    // Get all COLD_CALLER/OUTREACHER/SALES/ADMIN/MANAGER users in the org
     const sdrs = await this.prisma.user.findMany({
-      where: { organizationId: orgId, role: { in: ['SALES', 'ADMIN', 'MANAGER'] } },
+      where: { organizationId: orgId, role: { in: ['COLD_CALLER', 'OUTREACHER', 'SALES', 'ADMIN', 'MANAGER'] } },
       select: { id: true, name: true },
     });
 
@@ -168,7 +172,7 @@ export class OutreachService {
 
   async getCallLogs(orgId: string, userId: string, role: string) {
     const where: any = { orgId };
-    if (role !== 'ADMIN' && role !== 'MANAGER') where.userId = userId;
+    if (!FULL_ACCESS_ROLES.includes(role)) where.userId = userId;
     return this.prisma.outreachCall.findMany({
       where,
       include: { prospect: { select: { id: true, firstName: true, lastName: true, company: true } } },
@@ -289,7 +293,7 @@ export class OutreachService {
     const where: any = { orgId };
     if (prospectId) where.prospectId = prospectId;
     if (channel) where.channel = channel;
-    if (role !== 'ADMIN' && role !== 'MANAGER') where.assignedTo = userId;
+    if (!FULL_ACCESS_ROLES.includes(role)) where.assignedTo = userId;
     return this.prisma.outreachMessage.findMany({
       where,
       include: { prospect: { select: { id: true, firstName: true, lastName: true, company: true } } },
