@@ -1,5 +1,6 @@
 "use client";
 
+import RoleGuard from "@/components/RoleGuard";
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -33,7 +34,7 @@ const STATUS_COLORS: Record<string, string> = {
   DEAD:          "bg-rose-500/20 text-rose-400 border-rose-500/30",
 };
 
-export default function ColdCallersPage() {
+function ColdCallersDashboard() {
   const { toast } = useToast();
   const { user } = useAuthStore();
   const [tab, setTab] = useState<Tab>("My Today");
@@ -479,6 +480,14 @@ export default function ColdCallersPage() {
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+export default function ColdCallersPage() {
+  return (
+    <RoleGuard allowedRoles={["COLD_CALLER"]}>
+      <ColdCallersDashboard />
+    </RoleGuard>
   );
 }
 

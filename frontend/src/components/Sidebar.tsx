@@ -13,7 +13,8 @@ import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { useAuthStore } from "@/lib/store";
 
-const navGroups = [
+// Nav items shown to admin/manager (full access)
+const ADMIN_NAV_GROUPS = [
   {
     label: "Overview",
     color: "from-sky-400 to-blue-500",
@@ -52,6 +53,7 @@ const navGroups = [
       { name: "Projects", icon: FolderKanban, href: "/dashboard/projects" },
       { name: "Task Board", icon: CheckSquare, href: "/dashboard/tasks" },
       { name: "Developer", icon: Code2, href: "/dashboard/developer" },
+      { name: "Freelancer Hub", icon: Briefcase, href: "/dashboard/freelancer" },
       { name: "Resources", icon: Cpu, href: "/dashboard/resources" },
     ],
   },
@@ -77,7 +79,7 @@ const navGroups = [
     items: [
       { name: "Operations", icon: Briefcase, href: "/dashboard/operations" },
       { name: "Partners", icon: Handshake, href: "/dashboard/partners" },
-      { name: "Team", icon: Users2, href: "/dashboard/team", roles: ["ADMIN", "MANAGER", "SUPER_ADMIN"] },
+      { name: "Team", icon: Users2, href: "/dashboard/team" },
     ],
   },
   {
@@ -95,17 +97,137 @@ const navGroups = [
   },
 ];
 
+// Role-specific nav — each role only sees their workspace
+const ROLE_NAV: Record<string, { label: string; color: string; glow: string; bg: string; border: string; dot: string; items: { name: string; icon: any; href: string }[] }[]> = {
+  DEVELOPER: [
+    {
+      label: "My Workspace",
+      color: "from-blue-400 to-cyan-500",
+      glow: "shadow-blue-500/40",
+      bg: "bg-blue-500/10",
+      border: "border-blue-500/20",
+      dot: "bg-blue-400",
+      items: [
+        { name: "Developer Dashboard", icon: Code2, href: "/dashboard/developer" },
+        { name: "Task Board", icon: CheckSquare, href: "/dashboard/tasks" },
+        { name: "Projects", icon: FolderKanban, href: "/dashboard/projects" },
+      ],
+    },
+    {
+      label: "Resources",
+      color: "from-violet-400 to-purple-500",
+      glow: "shadow-purple-500/40",
+      bg: "bg-purple-500/10",
+      border: "border-purple-500/20",
+      dot: "bg-purple-400",
+      items: [
+        { name: "Knowledge Base", icon: BookOpen, href: "/dashboard/knowledge" },
+        { name: "Resources", icon: Cpu, href: "/dashboard/resources" },
+      ],
+    },
+  ],
+  COLD_CALLER: [
+    {
+      label: "My Workspace",
+      color: "from-violet-400 to-purple-500",
+      glow: "shadow-purple-500/40",
+      bg: "bg-purple-500/10",
+      border: "border-purple-500/20",
+      dot: "bg-purple-400",
+      items: [
+        { name: "Cold Callers", icon: Phone, href: "/dashboard/cold-callers" },
+      ],
+    },
+    {
+      label: "Resources",
+      color: "from-indigo-400 to-cyan-500",
+      glow: "shadow-cyan-500/40",
+      bg: "bg-cyan-500/10",
+      border: "border-cyan-500/20",
+      dot: "bg-cyan-400",
+      items: [
+        { name: "Knowledge Base", icon: BookOpen, href: "/dashboard/knowledge" },
+      ],
+    },
+  ],
+  OUTREACHER: [
+    {
+      label: "My Workspace",
+      color: "from-emerald-400 to-teal-500",
+      glow: "shadow-emerald-500/40",
+      bg: "bg-emerald-500/10",
+      border: "border-emerald-500/20",
+      dot: "bg-emerald-400",
+      items: [
+        { name: "Cold Outreach", icon: PhoneCall, href: "/dashboard/outreach" },
+      ],
+    },
+    {
+      label: "Resources",
+      color: "from-indigo-400 to-cyan-500",
+      glow: "shadow-cyan-500/40",
+      bg: "bg-cyan-500/10",
+      border: "border-cyan-500/20",
+      dot: "bg-cyan-400",
+      items: [
+        { name: "Knowledge Base", icon: BookOpen, href: "/dashboard/knowledge" },
+      ],
+    },
+  ],
+  FREELANCER: [
+    {
+      label: "My Workspace",
+      color: "from-amber-400 to-orange-500",
+      glow: "shadow-amber-500/40",
+      bg: "bg-amber-500/10",
+      border: "border-amber-500/20",
+      dot: "bg-amber-400",
+      items: [
+        { name: "Freelancer Hub", icon: Briefcase, href: "/dashboard/freelancer" },
+        { name: "Projects", icon: FolderKanban, href: "/dashboard/projects" },
+        { name: "Task Board", icon: CheckSquare, href: "/dashboard/tasks" },
+      ],
+    },
+    {
+      label: "Resources",
+      color: "from-indigo-400 to-cyan-500",
+      glow: "shadow-cyan-500/40",
+      bg: "bg-cyan-500/10",
+      border: "border-cyan-500/20",
+      dot: "bg-cyan-400",
+      items: [
+        { name: "Knowledge Base", icon: BookOpen, href: "/dashboard/knowledge" },
+      ],
+    },
+  ],
+};
+
+const ADMIN_ROLES = ["ADMIN", "MANAGER", "SUPER_ADMIN", "SALES"]; // same set as FULL_ACCESS_ROLES in RoleGuard
+
+const ROLE_BADGE: Record<string, { label: string; color: string }> = {
+  SUPER_ADMIN: { label: "Super Admin",  color: "text-violet-400" },
+  ADMIN:       { label: "Admin",        color: "text-rose-400" },
+  MANAGER:     { label: "Manager",      color: "text-blue-400" },
+  SALES:       { label: "Sales",        color: "text-emerald-400" },
+  DEVELOPER:   { label: "Developer",    color: "text-cyan-400" },
+  COLD_CALLER: { label: "Cold Caller",  color: "text-purple-400" },
+  OUTREACHER:  { label: "Outreacher",   color: "text-teal-400" },
+  FREELANCER:  { label: "Freelancer",   color: "text-amber-400" },
+  CLIENT:      { label: "Client",       color: "text-zinc-400" },
+};
+
 export default function Sidebar({ onLogout }: { onLogout?: () => void }) {
   const pathname = usePathname();
   const { user } = useAuthStore();
   const [collapsed, setCollapsed] = useState<string[]>([]);
 
+  const isAdmin = ADMIN_ROLES.includes(user?.role ?? "");
+  const navGroups = isAdmin ? ADMIN_NAV_GROUPS : (ROLE_NAV[user?.role ?? ""] ?? ADMIN_NAV_GROUPS);
+
   const toggleGroup = (label: string) =>
     setCollapsed((p) => p.includes(label) ? p.filter((x) => x !== label) : [...p, label]);
 
-  const activeGroup = navGroups.find(g => g.items.some(i =>
-    i.href === pathname || (i.href !== "/dashboard" && pathname.startsWith(i.href))
-  ));
+  const badge = ROLE_BADGE[user?.role ?? ""] ?? { label: user?.role ?? "", color: "text-zinc-400" };
 
   return (
     <div className="w-64 border-r border-white/5 bg-[#080808] flex flex-col h-screen flex-shrink-0 relative overflow-hidden">
@@ -123,7 +245,7 @@ export default function Sidebar({ onLogout }: { onLogout?: () => void }) {
 
       {/* Logo Section */}
       <div className="p-6 mb-1">
-        <Link href="/dashboard" className="flex items-center gap-3 group">
+        <Link href={isAdmin ? "/dashboard" : (Object.values(ROLE_NAV[user?.role ?? ""] ?? [])[0]?.items[0]?.href ?? "/dashboard")} className="flex items-center gap-3 group">
           <motion.div
             whileHover={{ scale: 1.08, rotate: 5 }}
             transition={{ type: "spring", stiffness: 400, damping: 20 }}
@@ -142,7 +264,9 @@ export default function Sidebar({ onLogout }: { onLogout?: () => void }) {
                 transition={{ duration: 2, repeat: Infinity }}
                 className="w-1.5 h-1.5 rounded-full bg-emerald-400"
               />
-              <p className="text-[9px] text-zinc-600 font-bold tracking-widest uppercase">Live · Mission Control</p>
+              <p className="text-[9px] text-zinc-600 font-bold tracking-widest uppercase">
+                {isAdmin ? "Mission Control" : `${badge.label} View`}
+              </p>
             </div>
           </div>
         </Link>
@@ -184,7 +308,7 @@ export default function Sidebar({ onLogout }: { onLogout?: () => void }) {
                     transition={{ duration: 0.2, ease: "easeInOut" }}
                     className="overflow-hidden space-y-0.5"
                   >
-                    {group.items.filter(item => !(item as any).roles || (item as any).roles.includes(user?.role)).map((item, ii) => {
+                    {group.items.map((item, ii) => {
                       const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
                       return (
                         <motion.div
@@ -202,7 +326,6 @@ export default function Sidebar({ onLogout }: { onLogout?: () => void }) {
                                 : "text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.025]"
                             )}
                           >
-                            {/* Active glow effect */}
                             {active && (
                               <motion.div
                                 layoutId="active-pill"
@@ -217,7 +340,6 @@ export default function Sidebar({ onLogout }: { onLogout?: () => void }) {
                                 className={cn("absolute inset-0 bg-gradient-to-r opacity-5", group.color)}
                               />
                             )}
-
                             <div className={cn(
                               "relative z-10 p-1.5 rounded-lg transition-all duration-200",
                               active
@@ -226,9 +348,7 @@ export default function Sidebar({ onLogout }: { onLogout?: () => void }) {
                             )}>
                               <item.icon size={13} strokeWidth={active ? 2.5 : 2} />
                             </div>
-
                             <span className="relative z-10 flex-1">{item.name}</span>
-
                             {active && (
                               <motion.div
                                 animate={{ scale: [1, 1.3, 1], opacity: [0.8, 1, 0.8] }}
@@ -277,7 +397,7 @@ export default function Sidebar({ onLogout }: { onLogout?: () => void }) {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-[11px] font-bold text-white truncate">{user?.name ?? "Unknown"}</p>
-            <p className="text-[9px] text-zinc-600 font-bold uppercase tracking-tighter">{user?.role ?? ""}</p>
+            <p className={cn("text-[9px] font-bold uppercase tracking-tighter", badge.color)}>{badge.label}</p>
           </div>
           <div className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]" />
         </div>

@@ -1,11 +1,16 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Users, Target, TrendingUp, DollarSign, ArrowUpRight, Zap, Activity, BarChart3 } from "lucide-react";
+import {
+  Users, Target, TrendingUp, DollarSign, ArrowUpRight, Zap,
+  BarChart3, Code2, Phone, PhoneCall, Briefcase, Eye,
+} from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { cn } from "@/lib/utils";
 import { analyticsApi } from "@/lib/endpoints";
+import { useAuthStore } from "@/lib/store";
 
 const SEED_CHART = [
   { name: "Jan", value: 4000 },
@@ -16,7 +21,63 @@ const SEED_CHART = [
   { name: "Jun", value: 2390 },
 ];
 
-function AnimatedNumber({ value, prefix = "", suffix = "" }: { value: string; prefix?: string; suffix?: string }) {
+// Role → auto-redirect destination
+const ROLE_REDIRECT: Record<string, string> = {
+  DEVELOPER:   "/dashboard/developer",
+  COLD_CALLER: "/dashboard/cold-callers",
+  OUTREACHER:  "/dashboard/outreach",
+  FREELANCER:  "/dashboard/freelancer",
+};
+
+// Role dashboard cards shown to admins
+const ROLE_DASHBOARDS = [
+  {
+    role: "DEVELOPER",
+    label: "Developer Dashboard",
+    desc: "Task queue, time logging, leaderboard",
+    href: "/dashboard/developer",
+    icon: Code2,
+    gradient: "from-blue-500 to-cyan-500",
+    bg: "from-blue-500/10 to-cyan-500/5",
+    border: "border-blue-500/20",
+    textColor: "text-blue-400",
+  },
+  {
+    role: "COLD_CALLER",
+    label: "Cold Callers",
+    desc: "Daily call queue, outcomes, leaderboard",
+    href: "/dashboard/cold-callers",
+    icon: Phone,
+    gradient: "from-violet-500 to-purple-500",
+    bg: "from-violet-500/10 to-purple-500/5",
+    border: "border-violet-500/20",
+    textColor: "text-violet-400",
+  },
+  {
+    role: "OUTREACHER",
+    label: "Outreach Engine",
+    desc: "Prospects, sequences, inbox, SDR KPIs",
+    href: "/dashboard/outreach",
+    icon: PhoneCall,
+    gradient: "from-emerald-500 to-teal-500",
+    bg: "from-emerald-500/10 to-teal-500/5",
+    border: "border-emerald-500/20",
+    textColor: "text-emerald-400",
+  },
+  {
+    role: "FREELANCER",
+    label: "Freelancer Hub",
+    desc: "Projects, tasks, time tracking, earnings",
+    href: "/dashboard/freelancer",
+    icon: Briefcase,
+    gradient: "from-amber-500 to-orange-500",
+    bg: "from-amber-500/10 to-orange-500/5",
+    border: "border-amber-500/20",
+    textColor: "text-amber-400",
+  },
+];
+
+function AnimatedNumber({ value }: { value: string }) {
   return (
     <motion.span
       key={value}
@@ -24,14 +85,23 @@ function AnimatedNumber({ value, prefix = "", suffix = "" }: { value: string; pr
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
     >
-      {prefix}{value}{suffix}
+      {value}
     </motion.span>
   );
 }
 
 export default function OverviewPage() {
+  const router = useRouter();
+  const { user } = useAuthStore();
   const [overview, setOverview] = useState<any>(null);
   const [chartData, setChartData] = useState(SEED_CHART);
+
+  // Role-based redirect — send restricted roles straight to their home dashboard
+  useEffect(() => {
+    if (!user) return;
+    const dest = ROLE_REDIRECT[user.role];
+    if (dest) router.replace(dest);
+  }, [user, router]);
 
   useEffect(() => {
     analyticsApi.overview()
@@ -45,6 +115,9 @@ export default function OverviewPage() {
       })
       .catch(() => {});
   }, []);
+
+  // While redirecting non-admins, show nothing
+  if (user && ROLE_REDIRECT[user.role]) return null;
 
   const stats = [
     {
@@ -95,10 +168,10 @@ export default function OverviewPage() {
 
   const snapshot = overview ? [
     { label: "Pipeline Value", value: `$${overview.pipelineValue.toLocaleString()}`, gradient: "from-blue-500 to-indigo-500", pct: Math.min(overview.pipelineValue / 100000 * 100, 100) },
-    { label: "Open Tickets", value: `${overview.openTickets}`, gradient: "from-rose-500 to-pink-500", pct: Math.min(overview.openTickets * 10, 100) },
-    { label: "Active Deals", value: `${overview.activeDeals}`, gradient: "from-emerald-500 to-teal-500", pct: Math.min(overview.activeDeals * 10, 100) },
-    { label: "Team Members", value: `${overview.totalEmployees}`, gradient: "from-violet-500 to-purple-500", pct: Math.min(overview.totalEmployees * 5, 100) },
-    { label: "Total Tasks", value: `${overview.totalTasks}`, gradient: "from-amber-500 to-orange-500", pct: Math.min(overview.totalTasks * 4, 100) },
+    { label: "Open Tickets",   value: `${overview.openTickets}`,  gradient: "from-rose-500 to-pink-500",    pct: Math.min(overview.openTickets * 10, 100) },
+    { label: "Active Deals",   value: `${overview.activeDeals}`,  gradient: "from-emerald-500 to-teal-500", pct: Math.min(overview.activeDeals * 10, 100) },
+    { label: "Team Members",   value: `${overview.totalEmployees}`,gradient: "from-violet-500 to-purple-500",pct: Math.min(overview.totalEmployees * 5, 100) },
+    { label: "Total Tasks",    value: `${overview.totalTasks}`,   gradient: "from-amber-500 to-orange-500", pct: Math.min(overview.totalTasks * 4, 100) },
   ] : null;
 
   return (
@@ -133,6 +206,36 @@ export default function OverviewPage() {
         </div>
       </div>
 
+      {/* Role Dashboards — Admin Quick Access */}
+      <div>
+        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500 mb-3">Role Dashboards</p>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {ROLE_DASHBOARDS.map((d, i) => (
+            <motion.a
+              key={d.role}
+              href={d.href}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.07, ease: [0.22, 1, 0.36, 1] }}
+              whileHover={{ y: -3, transition: { duration: 0.2 } }}
+              className={cn(
+                "p-5 rounded-2xl border bg-gradient-to-br cursor-pointer group relative overflow-hidden",
+                d.bg, d.border
+              )}
+            >
+              <div className="flex items-start justify-between mb-4">
+                <div className={cn("p-2.5 rounded-xl bg-gradient-to-br shadow-lg", d.gradient)}>
+                  <d.icon size={15} className="text-white" />
+                </div>
+                <Eye size={12} className="text-zinc-600 group-hover:text-zinc-400 transition-colors mt-1" />
+              </div>
+              <p className={cn("text-[10px] font-black uppercase tracking-widest mb-1", d.textColor)}>{d.label}</p>
+              <p className="text-[11px] text-zinc-500 leading-relaxed">{d.desc}</p>
+            </motion.a>
+          ))}
+        </div>
+      </div>
+
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
         {stats.map((stat, i) => (
@@ -147,13 +250,11 @@ export default function OverviewPage() {
               stat.bg, stat.border
             )}
           >
-            {/* Background shimmer */}
             <motion.div
               animate={{ x: ["-100%", "200%"] }}
               transition={{ duration: 3, repeat: Infinity, ease: "linear", delay: i * 0.5 }}
               className="absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-white/3 to-transparent skew-x-12 pointer-events-none"
             />
-
             <div className="flex items-start justify-between mb-5">
               <div className={cn("p-2.5 rounded-xl bg-gradient-to-br shadow-lg", stat.gradient, stat.glow)}>
                 <stat.icon size={17} className="text-white" />

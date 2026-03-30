@@ -1,5 +1,6 @@
 "use client";
 
+import RoleGuard from "@/components/RoleGuard";
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -37,7 +38,7 @@ const PRIORITY_DOT: Record<string, string> = {
   LOW:    "bg-zinc-600",
 };
 
-export default function DeveloperPage() {
+function DeveloperDashboard() {
   const { toast } = useToast();
   const { user } = useAuthStore();
   const [tab, setTab] = useState<Tab>("My Today");
@@ -588,6 +589,14 @@ export default function DeveloperPage() {
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+export default function DeveloperPage() {
+  return (
+    <RoleGuard allowedRoles={["DEVELOPER"]}>
+      <DeveloperDashboard />
+    </RoleGuard>
   );
 }
 

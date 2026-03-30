@@ -51,9 +51,21 @@ export default function LoginPage() {
     }
   };
 
-  const demoLogin = () => {
-    setEmail("nic@niche.com");
-    setPassword("niche123");
+  const [showDemo, setShowDemo] = useState(false);
+
+  const DEMO_ACCOUNTS = [
+    { role: "Admin",       email: "admin@demo.com",      color: "text-rose-400",   bg: "hover:bg-rose-500/10 border-rose-500/20" },
+    { role: "Manager",     email: "manager@demo.com",    color: "text-blue-400",   bg: "hover:bg-blue-500/10 border-blue-500/20" },
+    { role: "Developer",   email: "developer@demo.com",  color: "text-cyan-400",   bg: "hover:bg-cyan-500/10 border-cyan-500/20" },
+    { role: "Cold Caller", email: "coldcaller@demo.com", color: "text-purple-400", bg: "hover:bg-purple-500/10 border-purple-500/20" },
+    { role: "Outreacher",  email: "outreacher@demo.com", color: "text-teal-400",   bg: "hover:bg-teal-500/10 border-teal-500/20" },
+    { role: "Freelancer",  email: "freelancer@demo.com", color: "text-amber-400",  bg: "hover:bg-amber-500/10 border-amber-500/20" },
+  ];
+
+  const demoLogin = (email: string) => {
+    setEmail(email);
+    setPassword("Demo@1234");
+    setShowDemo(false);
   };
 
   return (
@@ -187,13 +199,41 @@ export default function LoginPage() {
             </motion.button>
           </form>
 
-          {/* Demo */}
-          <button
-            onClick={demoLogin}
-            className="w-full mt-3 py-3 rounded-xl border border-zinc-700/60 text-zinc-400 text-sm hover:bg-zinc-800/50 hover:text-zinc-200 hover:border-zinc-600/60 transition-all font-medium"
-          >
-            Use demo credentials
-          </button>
+          {/* Demo credentials panel */}
+          <div className="mt-3">
+            <button
+              onClick={() => setShowDemo(p => !p)}
+              className="w-full py-2.5 rounded-xl border border-zinc-700/60 text-zinc-400 text-xs hover:bg-zinc-800/50 hover:text-zinc-200 hover:border-zinc-600/60 transition-all font-semibold"
+            >
+              {showDemo ? "Hide" : "Try demo accounts"} ↓
+            </button>
+
+            <AnimatePresence>
+              {showDemo && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="overflow-hidden"
+                >
+                  <div className="mt-2 p-3 bg-zinc-800/40 rounded-xl border border-zinc-700/40 space-y-1.5">
+                    <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-2">Password: Demo@1234</p>
+                    {DEMO_ACCOUNTS.map(d => (
+                      <button
+                        key={d.email}
+                        onClick={() => demoLogin(d.email)}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border text-xs transition-all ${d.bg}`}
+                      >
+                        <span className={`font-bold ${d.color}`}>{d.role}</span>
+                        <span className="text-zinc-500 font-mono text-[10px]">{d.email}</span>
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
 
           <p className="text-center text-xs text-zinc-700 mt-5">
             No account?{" "}

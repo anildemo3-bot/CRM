@@ -1,5 +1,6 @@
 "use client";
 
+import RoleGuard from "@/components/RoleGuard";
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -70,7 +71,7 @@ const CHANNEL_COLORS: Record<string, string> = {
 
 // ─── MAIN COMPONENT ───────────────────────────────────────────
 
-export default function OutreachPage() {
+function OutreachDashboard() {
   const { toast } = useToast();
   const [mainTab, setMainTab] = useState<MainTab>("My Today");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -1397,5 +1398,13 @@ export default function OutreachPage() {
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+export default function OutreachPage() {
+  return (
+    <RoleGuard allowedRoles={["OUTREACHER"]}>
+      <OutreachDashboard />
+    </RoleGuard>
   );
 }

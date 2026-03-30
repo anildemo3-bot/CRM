@@ -11,12 +11,15 @@ const ROLE_CONFIG: Record<string, { label: string; color: string; icon: any }> =
   SUPER_ADMIN: { label: "Super Admin",  color: "bg-violet-500/20 text-violet-400 border-violet-500/30", icon: Crown },
   ADMIN:       { label: "Admin",        color: "bg-rose-500/20 text-rose-400 border-rose-500/30",       icon: Crown },
   MANAGER:     { label: "Manager",      color: "bg-blue-500/20 text-blue-400 border-blue-500/30",       icon: Shield },
-  SALES:       { label: "Sales/Caller", color: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30", icon: Phone },
+  SALES:       { label: "Sales",        color: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30", icon: Phone },
   DEVELOPER:   { label: "Developer",    color: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30",       icon: Code2 },
-  CLIENT:      { label: "Client",       color: "bg-amber-500/20 text-amber-400 border-amber-500/30",    icon: User },
+  COLD_CALLER: { label: "Cold Caller",  color: "bg-purple-500/20 text-purple-400 border-purple-500/30", icon: Phone },
+  OUTREACHER:  { label: "Outreacher",   color: "bg-teal-500/20 text-teal-400 border-teal-500/30",       icon: Phone },
+  FREELANCER:  { label: "Freelancer",   color: "bg-amber-500/20 text-amber-400 border-amber-500/30",    icon: User },
+  CLIENT:      { label: "Client",       color: "bg-zinc-500/20 text-zinc-400 border-zinc-500/30",       icon: User },
 };
 
-const INVITE_ROLES = ["MANAGER", "SALES", "DEVELOPER", "CLIENT"];
+const INVITE_ROLES = ["MANAGER", "DEVELOPER", "COLD_CALLER", "OUTREACHER", "FREELANCER", "SALES", "CLIENT"];
 
 export default function TeamPage() {
   const { user } = useAuthStore();
